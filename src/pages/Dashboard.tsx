@@ -29,9 +29,15 @@ export function Dashboard() {
   const latestWeight = data.weight[0];
   const todayGlasses = data.water[toISODate(new Date())] ?? 0;
   const latestMovement = data.movements[0];
-  const nextAppointment = [...data.appointments]
-    .filter((item) => !item.done)
-    .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+  const todayISO = toISODate(new Date());
+  const pendingAppointments = data.appointments.filter((item) => !item.done);
+  // Prefer the next appointment that has not happened yet; if the whole schedule
+  // is already in the past, fall back to the earliest pending one.
+  const nextAppointment =
+    pendingAppointments
+      .filter((item) => item.date >= todayISO)
+      .sort((a, b) => (a.date < b.date ? -1 : 1))[0] ??
+    [...pendingAppointments].sort((a, b) => (a.date < b.date ? -1 : 1))[0];
   const displayName = data.profile.name.trim();
   const hasDates = Boolean(ga && eddISO);
 
@@ -163,10 +169,10 @@ export function Dashboard() {
             {nextAppointment ? (
               <div>
                 <p style={{ fontWeight: 700, color: 'var(--rose-700)' }}>
-                  {t('anc.weekOf', { week: nextAppointment.week })}
+                  {t('anc.weekOf', { n: nextAppointment.week })}
                 </p>
                 <p className="muted small">
-                  {formatDate(nextAppointment.date, lang)} · {t('anc.contactN', { n: nextAppointment.week })}
+                  {formatDate(nextAppointment.date, lang)}
                 </p>
                 {data.profile.clinic && (
                   <p className="tiny muted" style={{ marginBlockStart: 4 }}>
@@ -246,7 +252,7 @@ export function Dashboard() {
           }
         >
           <p style={{ fontWeight: 600, color: 'var(--lav-600)', marginBlockEnd: 6 }}>
-            {t('tracker.weekN', { week: weekInfo.week })} — {pick(weekInfo.tip)}
+            {t('tracker.weekN', { n: weekInfo.week })} — {pick(weekInfo.tip)}
           </p>
           <p className="small muted">{pick(weekInfo.fetal)}</p>
         </Card>

@@ -37,7 +37,7 @@ export function Nutrition() {
         <div className="split" style={{ alignItems: 'center' }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: '1.35rem', color: 'var(--lav-600)' }}>
-              {glasses} / {WATER_GOAL_GLASSES} {t('nutrition.glasses')}
+              {t('nutrition.glasses', { n: glasses, total: WATER_GOAL_GLASSES })}
             </div>
             <p className="small muted" style={{ marginBlock: 6 }}>
               {glasses * GLASS_ML} ml · {t('nutrition.goal')}

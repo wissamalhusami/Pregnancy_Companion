@@ -105,7 +105,7 @@ export function Labor() {
                 </div>
                 <p className="small">{pick(stage.what)}</p>
                 <p className="tiny muted">
-                  <strong>{t('labor.stage')}:</strong> {pick(stage.role)}
+                  <strong>{t('labor.stage', { n: stage.number })}:</strong> {pick(stage.role)}
                 </p>
               </div>
             </li>
@@ -201,7 +201,7 @@ export function Labor() {
             </div>
 
             <p className="tiny muted" style={{ textAlign: 'center', marginBlockStart: 8 }}>
-              {t('labor.round')}: {breathing ? round : 0} · {t('labor.inhale')} {technique?.inhale ?? 4}s ·{' '}
+              {t('labor.round', { n: breathing ? round : 0 })} · {t('labor.inhale')} {technique?.inhale ?? 4}s ·{' '}
               {t('labor.hold')} {technique?.hold ?? 0}s · {t('labor.exhale')} {technique?.exhale ?? 6}s
             </p>
           </div>

@@ -47,7 +47,7 @@ export function Tracker() {
 
           <div style={{ textAlign: 'center', flex: 1, minWidth: 130 }}>
             <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--rose-700)' }}>
-              {t('tracker.weekN', { week: selected })}
+              {t('tracker.weekN', { n: selected })}
             </div>
             <div className="tiny muted">
               {t('tracker.trimesterN', { n: trimester })}
@@ -132,12 +132,12 @@ export function Tracker() {
           <Card title={t('tracker.method')} icon="info">
             <Stat
               label={t('dashboard.gestAge', { weeks: selected, days: 0 })}
-              value={t('tracker.weekN', { week: selected })}
+              value={t('tracker.weekN', { n: selected })}
               hint={`${t('dashboard.edd')}: ${eddISO ? formatDate(eddISO, lang) : '—'}`}
               tone="lav"
             />
             <p className="small muted" style={{ marginBlockStart: 12 }}>
-              {t('tracker.lmpUsed')}: {data.profile.lmp ? formatDate(data.profile.lmp, lang) : '—'}
+              {t('tracker.lmpUsed', { date: data.profile.lmp ? formatDate(data.profile.lmp, lang) : '—' })}
             </p>
             <Link className="section-link" to="/setup" style={{ marginBlockStart: 8, display: 'inline-flex' }}>
               {t('dashboard.setupCta')} <Icon name={isRTL ? 'chevronLeft' : 'chevronRight'} size={14} />

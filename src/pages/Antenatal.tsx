@@ -130,7 +130,7 @@ export function Antenatal() {
         const next = appointments.find((item) => !item.done);
         if (next) {
           new Notification(t('anc.reminderOn'), {
-            body: `${t('anc.weekOf', { week: next.week })} — ${formatDate(next.date, lang)}`,
+            body: `${t('anc.weekOf', { n: next.week })} — ${formatDate(next.date, lang)}`,
           });
         }
       } else {
@@ -174,7 +174,7 @@ export function Antenatal() {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700 }}>
-                    {t('anc.contactN', { n: item.week })} · {formatDate(item.date, lang)}
+                    {t('anc.weekOf', { n: item.week })} · {formatDate(item.date, lang)}
                     {item.week === currentWeek && (
                       <span className="chip rose" style={{ marginInlineStart: 8 }}>
                         {t('tracker.current')}
