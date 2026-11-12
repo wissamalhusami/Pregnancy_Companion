@@ -90,6 +90,9 @@ export function validatePasswordReset(input: { password: string; confirm: string
 const AUTH_ERROR_KEYS: { match: string; key: string }[] = [
   { match: 'invalid login credentials', key: 'auth.errorInvalidCredentials' },
   { match: 'email not confirmed', key: 'auth.errorEmailNotConfirmed' },
+  { match: 'email_address_invalid', key: 'auth.errorInvalidEmail' },
+  { match: 'over_email_send_rate_limit', key: 'auth.errorRateLimited' },
+  { match: 'email rate limit exceeded', key: 'auth.errorRateLimited' },
   { match: 'user already registered', key: 'auth.errorEmailInUse' },
   { match: 'already been registered', key: 'auth.errorEmailInUse' },
   { match: 'password should be at least', key: 'auth.errorPasswordShort' },
