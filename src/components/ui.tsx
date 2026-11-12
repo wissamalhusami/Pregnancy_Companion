@@ -224,6 +224,11 @@ export function EmptyState({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
 }
 
+/** Compact "nothing recorded yet" placeholder used by the tracking tables. */
+export function Empty({ text }: { text: string }) {
+  return <div className="empty">{text}</div>;
+}
+
 /* --------------------------------- modal ---------------------------------- */
 
 export function Modal({
