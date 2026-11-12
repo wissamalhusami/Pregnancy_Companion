@@ -1288,3 +1288,49 @@ h3 {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Account panel (profile page)
+   ========================================================================== */
+.account-panel { display: block; }
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--rose-50, #fdf3f7), var(--lavender-50, #f7f1f8));
+  border: 1px solid var(--border-soft, #f0e3e9);
+}
+.account-avatar-img,
+.account-avatar-fallback {
+  inline-size: 56px;
+  block-size: 56px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  object-fit: cover;
+  box-shadow: 0 6px 16px rgba(158, 106, 132, 0.18);
+}
+.account-avatar-fallback {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, #e9b7cd, #c9a6d6);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+.account-name {
+  margin: 0;
+  font-weight: 800;
+  font-size: 1.02rem;
+  color: var(--text-strong, #3c2b33);
+}
+.account-guest { display: block; }
+.field-error {
+  display: block;
+  margin-block-start: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b3261e;
+}
