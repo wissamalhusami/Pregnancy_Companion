@@ -20,9 +20,15 @@ create table if not exists public.profiles (
   full_name text check (char_length(full_name) <= 120),
   avatar_url text check (char_length(avatar_url) <= 2048),
   preferred_language text not null default 'ar' check (preferred_language in ('ar', 'en')),
+  -- Last menstrual period, used by the client to compute gestational age.
+  lmp date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Installs created before this column existed get it added by re-running this
+-- script; the client selects and upserts `lmp` alongside the other fields.
+alter table public.profiles add column if not exists lmp date;
 
 comment on table public.profiles is 'RIFQAH account profile: one row per authenticated user.';
 
