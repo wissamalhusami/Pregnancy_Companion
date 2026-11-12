@@ -101,8 +101,9 @@ const AUTH_ERROR_KEYS: { match: string; key: string }[] = [
   { match: 'rate limit', key: 'auth.errorRateLimited' },
   { match: 'too many requests', key: 'auth.errorRateLimited' },
   { match: 'email_provider_disabled', key: 'auth.errorEmailProviderDisabled' },
-  { match: 'email signups are disabled', key: 'auth.errorSignupDisabled' },
-  { match: 'signups are disabled', key: 'auth.errorSignupDisabled' },
+  // GoTrue answers a disabled Email provider with "Email signups are disabled",
+  // which is the provider switch, not the project-wide signup switch.
+  { match: 'email signups are disabled', key: 'auth.errorEmailProviderDisabled' },
   { match: 'user_already_exists', key: 'auth.errorEmailInUse' },
   { match: 'provider is not enabled', key: 'auth.errorProviderDisabled' },
   { match: 'unsupported provider', key: 'auth.errorProviderDisabled' },
