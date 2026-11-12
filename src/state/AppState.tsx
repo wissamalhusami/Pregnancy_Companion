@@ -1,6 +1,23 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { createId, useStoredState } from '../lib/storage';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { createId, useIndexedState } from '../lib/storage';
 import { dataStorageKey } from '../lib/auth';
+import {
+  decideSync,
+  hasUserData,
+  pullUserData,
+  pushUserData,
+  userIdFromScope,
+  type SyncStatus,
+} from '../lib/sync';
 import type {
   AppData,
   Appointment,
@@ -96,6 +113,16 @@ interface AppStateValue {
   toggleBagItem: (id: string) => void;
   resetAll: () => void;
   loadSampleData: () => void;
+  /** Device storage state (IndexedDB). */
+  storage: { ready: boolean; persisted: boolean; error: string | null };
+  /** Cloud sync state; local data is always kept when the cloud is unreachable. */
+  sync: {
+    status: SyncStatus;
+    lastSyncedAt: string | null;
+    errorKey: string | null;
+    restored: boolean;
+    retry: () => void;
+  };
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
