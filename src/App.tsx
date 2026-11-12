@@ -12,7 +12,10 @@ import { Breastfeeding } from './pages/Breastfeeding';
 import { Postpartum } from './pages/Postpartum';
 import { Profile } from './pages/Profile';
 import { Setup } from './pages/Setup';
+import { Welcome } from './pages/Welcome';
+import { AuthPage, AuthCallbackPage } from './pages/Auth';
 import { useAppState } from './state/AppState';
+import { useAuth } from './state/AuthContext';
 
 /** Sends first-time visitors to the setup form, keeping the app usable without data. */
 function RequireSetup({ children }: { children: ReactNode }) {
@@ -24,7 +27,33 @@ function RequireSetup({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export function App() {
+/**
+ * Guards personal pages. When no Supabase project is connected the app runs in
+ * local mode, so the pages stay reachable instead of dead-ending at a login
+ * screen that cannot work.
+ */
+function Protected({ children }: { children: ReactNode }) {
+  const { ready, configured, user } = useAuth();
+  const location = useLocation();
+
+  if (!ready) {
+    return (
+      <div className="boot-screen" role="status" aria-live="polite">
+        <div className="boot-mark" aria-hidden="true" />
+        <p className="boot-text">RIFQAH</p>
+      </div>
+    );
+  }
+
+  if (configured && !user) {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/auth/login?next=${next}`} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function Shell() {
   return (
     <Layout>
       <Routes>
@@ -32,78 +61,103 @@ export function App() {
         <Route
           path="/"
           element={
-            <RequireSetup>
-              <Dashboard />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Dashboard />
+              </RequireSetup>
+            </Protected>
           }
         />
         <Route
           path="/tracker"
           element={
-            <RequireSetup>
-              <Tracker />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Tracker />
+              </RequireSetup>
+            </Protected>
           }
         />
         <Route
           path="/antenatal"
           element={
-            <RequireSetup>
-              <Antenatal />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Antenatal />
+              </RequireSetup>
+            </Protected>
           }
         />
         <Route
           path="/nutrition"
           element={
-            <RequireSetup>
-              <Nutrition />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Nutrition />
+              </RequireSetup>
+            </Protected>
           }
         />
+        {/* Safety information stays public: a woman must never be blocked
+            from danger-sign guidance by a login screen. */}
         <Route path="/danger-signs" element={<DangerSigns />} />
         <Route
           path="/movement"
           element={
-            <RequireSetup>
-              <Movement />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Movement />
+              </RequireSetup>
+            </Protected>
           }
         />
         <Route
           path="/labor"
           element={
-            <RequireSetup>
-              <Labor />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Labor />
+              </RequireSetup>
+            </Protected>
           }
         />
         <Route
           path="/breastfeeding"
           element={
-            <RequireSetup>
-              <Breastfeeding />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Breastfeeding />
+              </RequireSetup>
+            </Protected>
           }
         />
         <Route
           path="/postpartum"
           element={
-            <RequireSetup>
-              <Postpartum />
-            </RequireSetup>
+            <Protected>
+              <RequireSetup>
+                <Postpartum />
+              </RequireSetup>
+            </Protected>
           }
         />
-        <Route
-          path="/profile"
-          element={
-            <RequireSetup>
-              <Profile />
-            </RequireSetup>
-          }
-        />
+        <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
+  );
+}
+
+export function App() {
+  return (
+    <Routes>
+      <Route path="/welcome" element={<Welcome />} />
+      <Route path="/auth/login" element={<AuthPage mode="login" />} />
+      <Route path="/auth/register" element={<AuthPage mode="register" />} />
+      <Route path="/auth/forgot" element={<AuthPage mode="forgot" />} />
+      <Route path="/auth/reset" element={<AuthPage mode="reset" />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="*" element={<Shell />} />
+    </Routes>
   );
 }

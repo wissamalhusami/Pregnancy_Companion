@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { createId, useStoredState } from '../lib/storage';
+import { dataStorageKey } from '../lib/auth';
 import type {
   AppData,
   Appointment,
@@ -167,8 +168,15 @@ function sampleData(): AppData {
   };
 }
 
-export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useStoredState<AppData>('data', initialData);
+export function AppStateProvider({
+  children,
+  scope = 'guest',
+}: {
+  children: ReactNode;
+  /** Signed-in accounts get their own storage bucket; guests keep the legacy key. */
+  scope?: string;
+}) {
+  const [data, setData] = useStoredState<AppData>(dataStorageKey(scope), initialData);
 
   const value = useMemo<AppStateValue>(() => {
     const lmp = parseISODate(data.profile.lmp);

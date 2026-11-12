@@ -8,14 +8,19 @@ import {
 } from 'react';
 import type { Bi, Lang } from '../lib/types';
 import { useStoredState } from '../lib/storage';
+import { authStrings } from './authStrings';
 
 /**
  * Bilingual UI dictionary. Every key holds both languages so the two
  * versions can never drift apart; `pick` resolves data-level content.
  */
 export const ui: Record<string, Bi> = {
-  'app.name': { ar: 'رفيقة الحامل', en: 'Pregnancy Companion' },
-  'app.tagline': { ar: 'رفيقتك في رحلة الحمل', en: 'Your companion through pregnancy' },
+  ...authStrings,
+  'app.name': { ar: 'رِفْقَة', en: 'RIFQAH' },
+  'app.tagline': {
+    ar: 'رحلتكِ نحو أمومة آمنة.',
+    en: 'Your Pregnancy Journey, Your Health, Your Safety.',
+  },
   'app.project': {
     ar: 'مشروع جامعي – تمريض النساء والتوليد',
     en: 'University project – Gynecology & Maternity Nursing',
