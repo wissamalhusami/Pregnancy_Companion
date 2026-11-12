@@ -25,7 +25,7 @@ function downloadFile(name: string, text: string) {
 }
 
 export function Profile() {
-  const { t, lang, toggleLang } = useLang();
+  const { t, lang, toggleLang, pick } = useLang();
   const { data, updateProfile, replaceAll, resetAll, loadSampleData, storage, ga, eddISO } =
     useAppState();
 
@@ -407,9 +407,11 @@ export function Profile() {
       <Card title={t('profile.references')} icon="book">
         <ul className="ref-list">
           {references.map((item) => (
-            <li key={item.title.en}>
-              <strong>{item.title[lang]}</strong>
-              <span className="tiny muted">{item.source}</span>
+            <li key={item.id}>
+              <strong>{item.title}</strong>
+              <span className="tiny muted">
+                {item.publisher} · {item.year}
+              </span>
             </li>
           ))}
         </ul>
@@ -422,7 +424,7 @@ export function Profile() {
         </p>
       </Card>
 
-      <Disclaimer />
+      <Disclaimer>{pick(educationalDisclaimer)}</Disclaimer>
     </div>
   );
 }
