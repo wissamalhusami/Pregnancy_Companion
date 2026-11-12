@@ -16,40 +16,6 @@ export type AuthMode = 'login' | 'register' | 'forgot' | 'reset';
 
 const strengthKeys = ['', 'auth.strength1', 'auth.strength2', 'auth.strength3', 'auth.strength4'];
 
-function GoogleMark() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M23.5 12.3c0-.9-.1-1.5-.2-2.2H12v4.1h6.5c-.1 1.1-.8 2.7-2.3 3.8l-.1.1 3.4 2.6.2.1c2.1-2 3.8-4.9 3.8-8.5Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.2 0 5.9-1.1 7.8-2.9l-3.7-2.9c-1 .7-2.3 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5l-.1.1-3.4 2.7-.1.1C3.6 21.3 7.5 24 12 24Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.3 14.4A7.3 7.3 0 0 1 4.9 12c0-.8.1-1.6.4-2.4l-.1-.2L1.7 6.7l-.1.2A12 12 0 0 0 0 12c0 1.9.5 3.7 1.6 5.1l3.7-2.7Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.7c2.2 0 3.7.9 4.5 1.7l3.3-3.2C17.9 1.3 15.2 0 12 0 7.5 0 3.6 2.7 1.6 6.7l3.7 2.9C6.2 6.8 8.9 4.7 12 4.7Z"
-      />
-    </svg>
-  );
-}
-
-function FacebookMark() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <path
-        fill="#1877F2"
-        d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.6 4.5-4.6 1.3 0 2.6.2 2.6.2v2.9h-1.5c-1.5 0-1.9.9-1.9 1.8V12h3.3l-.5 3.5h-2.8v8.4A12 12 0 0 0 24 12Z"
-      />
-    </svg>
-  );
-}
-
 /** Reads an OAuth error passed back in the hash or query string. */
 function oauthErrorFrom(url: string): string | null {
   const hash = url.includes('#') ? url.slice(url.indexOf('#') + 1) : '';
@@ -129,7 +95,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     busy,
     signIn,
     signUp,
-    signInWithProvider,
     sendReset,
     updatePassword,
   } = useAuth();
@@ -215,12 +180,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setConfirm('');
   };
 
-  const oauth = async (provider: 'google' | 'facebook') => {
-    clearMessages();
-    const result = await signInWithProvider(provider);
-    if (!result.ok) setErrorKey(result.errorKey ?? 'auth.errorGeneric');
-  };
-
   const title = isRegister
     ? t('auth.registerTitle')
     : isForgot
@@ -272,34 +231,6 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               <strong>{t('auth.notConfiguredTitle')}</strong>
               <p>{t('auth.notConfiguredBody')}</p>
             </div>
-          )}
-
-          {(isRegister || mode === 'login') && (
-            <>
-              <div className="social-buttons">
-                <button
-                  type="button"
-                  className="social-btn"
-                  onClick={() => void oauth('google')}
-                  disabled={disabled}
-                >
-                  <GoogleMark />
-                  {t('auth.continueGoogle')}
-                </button>
-                <button
-                  type="button"
-                  className="social-btn"
-                  onClick={() => void oauth('facebook')}
-                  disabled={disabled}
-                >
-                  <FacebookMark />
-                  {t('auth.continueFacebook')}
-                </button>
-              </div>
-              <div className="auth-divider">
-                <span>{t('auth.orContinueWith')}</span>
-              </div>
-            </>
           )}
 
           {awaitingConfirm ? (
