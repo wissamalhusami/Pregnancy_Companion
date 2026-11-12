@@ -1,5 +1,4 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Tracker } from './pages/Tracker';
@@ -12,26 +11,10 @@ import { Breastfeeding } from './pages/Breastfeeding';
 import { Postpartum } from './pages/Postpartum';
 import { Profile } from './pages/Profile';
 import { Setup } from './pages/Setup';
-import { useAppState } from './state/AppState';
 
 /**
- * Sends a first-time visitor to the pregnancy setup form.
- *
- * This is a data check, not a login gate: there are no accounts in RIFQAH, so
- * the only reason to visit /setup is that no pregnancy record exists yet.
- * Safety and profile pages stay reachable at all times.
+ * Education and optional tracking are available before users add personal data.
  */
-function RequireSetup({ children }: { children: ReactNode }) {
-  const { data } = useAppState();
-  const location = useLocation();
-
-  if (!data.setupComplete && location.pathname !== '/setup') {
-    return <Navigate to="/setup" replace />;
-  }
-
-  return <>{children}</>;
-}
-
 export function App() {
   return (
     <Layout>
@@ -40,67 +23,35 @@ export function App() {
 
         <Route
           path="/"
-          element={
-            <RequireSetup>
-              <Dashboard />
-            </RequireSetup>
-          }
+          element={<Dashboard />}
         />
         <Route
           path="/tracker"
-          element={
-            <RequireSetup>
-              <Tracker />
-            </RequireSetup>
-          }
+          element={<Tracker />}
         />
         <Route
           path="/antenatal"
-          element={
-            <RequireSetup>
-              <Antenatal />
-            </RequireSetup>
-          }
+          element={<Antenatal />}
         />
         <Route
           path="/nutrition"
-          element={
-            <RequireSetup>
-              <Nutrition />
-            </RequireSetup>
-          }
+          element={<Nutrition />}
         />
         <Route
           path="/movement"
-          element={
-            <RequireSetup>
-              <Movement />
-            </RequireSetup>
-          }
+          element={<Movement />}
         />
         <Route
           path="/labor"
-          element={
-            <RequireSetup>
-              <Labor />
-            </RequireSetup>
-          }
+          element={<Labor />}
         />
         <Route
           path="/breastfeeding"
-          element={
-            <RequireSetup>
-              <Breastfeeding />
-            </RequireSetup>
-          }
+          element={<Breastfeeding />}
         />
         <Route
           path="/postpartum"
-          element={
-            <RequireSetup>
-              <Postpartum />
-            </RequireSetup>
-          }
+          element={<Postpartum />}
         />
 
         {/* Safety guidance is always available, even before setup. */}
