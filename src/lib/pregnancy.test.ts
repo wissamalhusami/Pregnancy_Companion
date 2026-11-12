@@ -58,9 +58,17 @@ describe('gestational age', () => {
   });
 
   it('flags post-term pregnancies after 42 weeks', () => {
-    const ga = gestationalAge(lmp, parseISODate('2026-10-20')!);
+    // LMP 2026-01-01 + 294 days = 2026-10-22, so use a clearly later date.
+    const ga = gestationalAge(lmp, parseISODate('2026-10-30')!);
+    expect(ga.totalDays).toBe(302);
     expect(ga.totalDays).toBeGreaterThan(GESTATION_DAYS + 14);
     expect(ga.postTerm).toBe(true);
+  });
+
+  it('does not flag 42 weeks exactly as post-term', () => {
+    const ga = gestationalAge(lmp, parseISODate('2026-10-22')!);
+    expect(ga.totalDays).toBe(294);
+    expect(ga.postTerm).toBe(false);
   });
 });
 
