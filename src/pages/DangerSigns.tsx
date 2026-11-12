@@ -93,7 +93,7 @@ export function DangerSigns() {
             <span>
               {lang === 'ar'
                 ? 'قلّة حركة الجنين أو تغيّر نمطها المعتاد سبب كافٍ للاتصال بمركز الرعاية في نفس اليوم.'
-                : 'Reduced or changed fetal movement is reason enough to contact your maternity unit the same day.'
+                : 'Reduced or changed fetal movement is reason enough to contact your maternity unit the same day.'}
             </span>
           </li>
         </ul>
