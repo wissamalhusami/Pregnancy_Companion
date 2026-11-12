@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLang } from '../i18n';
 import { useAppState } from '../state/AppState';
+import { useAuth } from '../state/AuthContext';
 import { references } from '../data/references';
 import { formatDate, toISODate } from '../lib/pregnancy';
+import { initialsOf, providerLabel, validateName } from '../lib/auth';
 import { Card, Disclaimer } from '../components/ui';
 import { Icon } from '../components/Icon';
 
@@ -11,6 +13,14 @@ export function Profile() {
   const { t, lang, setLang } = useLang();
   const navigate = useNavigate();
   const { data, updateProfile, resetAll, loadSampleData } = useAppState();
+  const {
+    user: account,
+    configured: authConfigured,
+    busy: authBusy,
+    updateProfile: saveAccountProfile,
+    sendReset,
+    signOut,
+  } = useAuth();
 
   const [name, setName] = useState(data.profile.name);
   const [lmp, setLmp] = useState(data.profile.lmp);
@@ -21,6 +31,19 @@ export function Profile() {
   const [clinic, setClinic] = useState(data.profile.clinic);
   const [confirmClear, setConfirmClear] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Account fields are kept separate from the pregnancy profile so a name change
+  // on the account never silently rewrites the medical record.
+  const [accountName, setAccountName] = useState(account?.name ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(account?.avatarUrl ?? '');
+  const [accountError, setAccountError] = useState('');
+  const [accountSaved, setAccountSaved] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+
+  useEffect(() => {
+    setAccountName(account?.name ?? '');
+    setAvatarUrl(account?.avatarUrl ?? '');
+  }, [account?.name, account?.avatarUrl]);
 
   const save = (event: React.FormEvent) => {
     event.preventDefault();
@@ -53,6 +76,39 @@ export function Profile() {
     navigate('/setup');
   };
 
+  const submitAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const validation = validateName(accountName);
+    if (!validation.ok) {
+      setAccountError(validation.errorKey ?? 'auth.errorName');
+      return;
+    }
+    setAccountError('');
+    const result = await saveAccountProfile({
+      name: accountName.trim(),
+      avatarUrl: avatarUrl.trim() || null,
+    });
+    if (!result.ok) {
+      setAccountError(result.errorKey ?? 'auth.errorGeneric');
+      return;
+    }
+    setAccountSaved(true);
+    window.setTimeout(() => setAccountSaved(false), 2500);
+  };
+
+  // Language is remembered on the account as well as locally, so a fresh device
+  // restores the same preference after signing in.
+  const chooseLanguage = (next: 'ar' | 'en') => {
+    setLang(next);
+    if (account) void saveAccountProfile({ language: next });
+  };
+
+  const requestReset = async () => {
+    if (!account?.email) return;
+    const result = await sendReset(account.email);
+    if (result.ok) setResetSent(true);
+  };
+
   return (
     <div>
       <header className="page-head">
@@ -61,6 +117,110 @@ export function Profile() {
           <p className="page-sub">{t('profile.subtitle')}</p>
         </div>
       </header>
+
+      <Card title={t('profile.account')} icon="user">
+        {account ? (
+          <div className="account-panel">
+            <div className="account-identity">
+              {account.avatarUrl ? (
+                <img
+                  className="account-avatar-img"
+                  src={account.avatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="account-avatar-fallback" aria-hidden="true">
+                  {initialsOf(account.name || account.email)}
+                </span>
+              )}
+              <div>
+                <p className="account-name">{account.name || account.email}</p>
+                <p className="tiny muted">{account.email}</p>
+                <div className="chip-row" style={{ marginBlockStart: 6 }}>
+                  <span className="chip">{providerLabel(account.provider)}</span>
+                  {account.createdAt && (
+                    <span className="chip">
+                      {t('profile.memberSince')}: {formatDate(new Date(account.createdAt), lang)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={submitAccount} className="form-grid" style={{ marginBlockStart: 16 }}>
+              <div className="field">
+                <label htmlFor="account-name">{t('profile.displayName')}</label>
+                <input
+                  id="account-name"
+                  value={accountName}
+                  onChange={(event) => setAccountName(event.target.value)}
+                  autoComplete="name"
+                  maxLength={120}
+                />
+                {accountError && <span className="field-error">{t(accountError)}</span>}
+              </div>
+              <div className="field">
+                <label htmlFor="account-avatar">{t('profile.avatar')}</label>
+                <input
+                  id="account-avatar"
+                  type="url"
+                  value={avatarUrl}
+                  onChange={(event) => setAvatarUrl(event.target.value)}
+                  placeholder="https://…"
+                />
+                <span className="tiny muted">{t('profile.avatarHint')}</span>
+              </div>
+              <div className="span-2 row-actions">
+                <button type="submit" className="btn" disabled={authBusy}>
+                  <Icon name="check" size={16} />
+                  {authBusy ? t('common.loading') : t('common.save')}
+                </button>
+                {accountSaved && (
+                  <span className="chip ok" role="status">
+                    {t('profile.accountSaved')}
+                  </span>
+                )}
+              </div>
+            </form>
+
+            <div className="row-actions" style={{ marginBlockStart: 10 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => void requestReset()}
+                disabled={authBusy}
+              >
+                <Icon name="shield" size={16} />
+                {t('profile.sendReset')}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => void signOut()}>
+                <Icon name="logout" size={16} />
+                {t('auth.logout')}
+              </button>
+            </div>
+            {resetSent && (
+              <p className="chip ok" role="status" style={{ marginBlockStart: 10 }}>
+                {t('profile.resetSent')}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="account-guest">
+            <p className="small">
+              <strong>{t('profile.guestTitle')}</strong>
+            </p>
+            <p className="small muted">
+              {authConfigured ? t('profile.guestBody') : t('auth.notConfiguredBody')}
+            </p>
+            <div className="row-actions" style={{ marginBlockStart: 10 }}>
+              <Link className="btn" to="/auth">
+                {t('nav.signIn')}
+              </Link>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <div className="split">
         <Card title={t('profile.personal')} icon="user">
@@ -140,14 +300,14 @@ export function Profile() {
               <button
                 type="button"
                 className={`btn ${lang === 'ar' ? '' : 'btn-ghost'}`}
-                onClick={() => setLang('ar')}
+                onClick={() => chooseLanguage('ar')}
               >
                 {t('profile.arabic')}
               </button>
               <button
                 type="button"
                 className={`btn ${lang === 'en' ? '' : 'btn-ghost'}`}
-                onClick={() => setLang('en')}
+                onClick={() => chooseLanguage('en')}
               >
                 {t('profile.english')}
               </button>
