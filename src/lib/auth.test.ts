@@ -50,9 +50,11 @@ describe('validateEmail', () => {
 describe('validatePassword', () => {
   it('enforces the documented minimum length', () => {
     expect(validatePassword('').errorKey).toBe('auth.errorPasswordRequired');
-    expect(validatePassword('a1'.repeat(MIN_PASSWORD_LENGTH)).errorKey).toBe(
-      'auth.errorPasswordShort',
-    );
+    // Has both a letter and a digit but is exactly one character too short.
+    const justUnder = `a1${'x'.repeat(MIN_PASSWORD_LENGTH - 3)}`;
+    expect(justUnder).toHaveLength(MIN_PASSWORD_LENGTH - 1);
+    expect(validatePassword(justUnder).errorKey).toBe('auth.errorPasswordShort');
+    expect(validatePassword(`a1${'x'.repeat(MIN_PASSWORD_LENGTH - 2)}`).ok).toBe(true);
   });
 
   it('requires a letter (Arabic or Latin) and a digit', () => {
