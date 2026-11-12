@@ -7,6 +7,7 @@ import { BrandLockup } from './Logo';
 import { Icon, type IconName } from './Icon';
 import { educationalDisclaimer } from '../data/references';
 import { initialsOf } from '../lib/auth';
+import { SyncBadge } from './SyncBadge';
 
 interface NavItem {
   to: string;
@@ -119,6 +120,8 @@ export function Layout({ children }: { children: ReactNode }) {
         </NavLink>
 
         <div className="header-actions">
+          <SyncBadge />
+
           {!configured && (
             <span className="chip chip-soft header-mode" title={t('auth.guestNoticeBody')}>
               <Icon name="shield" size={13} />
