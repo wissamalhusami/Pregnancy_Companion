@@ -172,3 +172,24 @@ create trigger records_touch_updated_at
 
 create index if not exists pregnancy_records_updated_at_idx
   on public.pregnancy_records (updated_at desc);
+
+-- ------------------------------------------------------------------ grants --
+-- RLS decides which ROWS a role may touch; GRANT decides whether that role may
+-- touch the table at all. Supabase installs these defaults on most projects,
+-- but where the default privileges were changed (or the table was created by a
+-- different role) every query fails with "42501 permission denied" even though
+-- the policies above are correct. Granting explicitly keeps sync working and
+-- leaves every row protected by those policies.
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select, insert, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.pregnancy_records to authenticated;
+
+-- Server-side tooling and the dashboard only. The browser never holds this key.
+grant all on public.profiles to service_role;
+grant all on public.pregnancy_records to service_role;
+
+-- Signed-out visitors have no business reading health records: the app always
+-- authenticates first, so `anon` gets nothing on either table.
+revoke all on public.profiles from anon;
+revoke all on public.pregnancy_records from anon;
