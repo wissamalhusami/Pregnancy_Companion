@@ -43,6 +43,7 @@ export const ui: Record<string, Bi> = {
   'common.day': { ar: 'يوم', en: 'day' },
   'common.empty': { ar: 'لا توجد بيانات مسجلة بعد', en: 'No records yet' },
   'common.saved': { ar: 'تم الحفظ', en: 'Saved' },
+  'common.saving': { ar: 'جارٍ الحفظ…', en: 'Saving…' },
 
   // Storage + cloud sync status (IndexedDB primary, Supabase when online).
   'storage.loading': { ar: 'جارٍ تحميل بياناتكِ المحفوظة…', en: 'Loading your saved data…' },
