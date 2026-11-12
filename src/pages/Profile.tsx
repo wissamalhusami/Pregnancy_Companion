@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLang } from '../i18n';
 import { useAppState } from '../state/AppState';
-import { references } from '../data/references';
+import { educationalDisclaimer, references } from '../data/references';
 import { formatDate } from '../lib/pregnancy';
 import { initialsOf } from '../lib/format';
 import { backupFileName, backupSummary, parseBackup, serializeBackup } from '../lib/backup';
