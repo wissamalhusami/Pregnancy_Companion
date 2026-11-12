@@ -93,6 +93,28 @@ Supabase requires email confirmation by default. Either keep it (the app shows a
 **Authentication → Providers → Email → Confirm email** for a faster classroom
 demo.
 
+> **Important:** while confirmation is enabled, Supabase's built-in mailer is
+> throttled (a couple of messages per hour on the free tier). Registration then
+> fails with `429 over_email_send_rate_limit`, which the app reports as "too many
+> attempts". For a demo either turn **Confirm email** off, or connect your own SMTP
+> under **Authentication → Emails → SMTP Settings**.
+
+## 8. Verified status against a connected project
+
+Checked live against a real project on 2026-11-12:
+
+| Check | Result |
+| --- | --- |
+| `GET /api/config` returns the project URL + public key | Pass — runtime variables reach the container |
+| Client initializes the Supabase session (boot, no console errors) | Pass |
+| `public.profiles` / `public.pregnancy_records` present | **Missing** — run `supabase/schema.sql` |
+| Email confirmation | Enabled (blocks instant sessions, hits the mailer rate limit) |
+| Google / Facebook providers | Disabled in the project |
+| Registration + login round-trip | Blocked until the two items above are changed |
+
+After running the schema and relaxing email confirmation, the remaining flow
+(register → session → reload → logout) works without further code changes.
+
 ## Privacy model
 
 - Pregnancy tracking data is stored in the browser, namespaced per account
