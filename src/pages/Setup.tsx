@@ -19,8 +19,9 @@ export function Setup() {
   const [height, setHeight] = useState(data.profile.heightCm ? String(data.profile.heightCm) : '');
   const [clinic, setClinic] = useState(data.profile.clinic);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!name.trim()) {
       setError(t('setup.errorName'));
@@ -31,7 +32,10 @@ export function Setup() {
       return;
     }
     setError('');
-    updateProfile({
+    setSaving(true);
+    // Wait for the durable write: navigating first could reload before the
+    // record reaches IndexedDB and land the user back on this screen.
+    await updateProfile({
       name: name.trim(),
       lmp,
       prePregnancyWeightKg: weight ? Number(weight) : null,
@@ -41,8 +45,9 @@ export function Setup() {
     navigate('/');
   };
 
-  const useSample = () => {
-    loadSampleData();
+  const useSample = async () => {
+    setSaving(true);
+    await loadSampleData();
     navigate('/');
   };
 
@@ -119,11 +124,16 @@ export function Setup() {
               </p>
             )}
             <div className="span-2 row-actions">
-              <button type="submit" className="btn">
+              <button type="submit" className="btn" disabled={saving} aria-busy={saving}>
                 <Icon name="check" size={16} />
-                {t('setup.submit')}
+                {saving ? t('common.saving') : t('setup.submit')}
               </button>
-              <button type="button" className="btn btn-ghost" onClick={useSample}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={useSample}
+                disabled={saving}
+              >
                 <Icon name="sparkles" size={16} />
                 {t('setup.sample')}
               </button>
