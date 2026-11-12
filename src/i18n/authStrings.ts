@@ -21,6 +21,11 @@ export const authStrings: Record<string, Bi> = {
   },
 
   /* ------------------------------------------------------------ navigation */
+  'nav.groupMain': { ar: 'الرئيسية', en: 'Overview' },
+  'nav.groupSafety': { ar: 'السلامة', en: 'Safety' },
+  'nav.groupCare': { ar: 'الرعاية والتحضير', en: 'Care & preparation' },
+  'nav.groupAccount': { ar: 'الحساب', en: 'Account' },
+  'nav.setup': { ar: 'بيانات الحمل', en: 'Pregnancy details' },
   'nav.signIn': { ar: 'تسجيل الدخول', en: 'Sign in' },
   'nav.signOut': { ar: 'تسجيل الخروج', en: 'Sign out' },
   'nav.account': { ar: 'الحساب', en: 'Account' },
