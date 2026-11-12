@@ -1,23 +1,6 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from 'react';
 import { createId, useIndexedState } from '../lib/storage';
-import { dataStorageKey } from '../lib/auth';
-import {
-  decideSync,
-  hasUserData,
-  pullUserData,
-  pushUserData,
-  userIdFromScope,
-  type SyncStatus,
-} from '../lib/sync';
+import { initialData } from '../lib/defaults';
 import type {
   AppData,
   Appointment,
@@ -43,38 +26,13 @@ import {
 /** WHO 2016 eight-contact antenatal model, expressed as gestational weeks. */
 export const ANC_WEEKS = [12, 20, 26, 30, 34, 36, 38, 40] as const;
 
-const emptyProfile: Profile = {
-  name: '',
-  lmp: '',
-  prePregnancyWeightKg: null,
-  heightCm: null,
-  clinic: '',
-};
+/**
+ * The app has no accounts, so every device holds exactly one record under one
+ * fixed IndexedDB key. Nothing is namespaced by user id any more.
+ */
+export const LOCAL_DATA_KEY = 'data';
 
-const emptyBirthPlan: BirthPlan = {
-  birthPlace: '',
-  supportPerson: '',
-  painRelief: '',
-  positions: '',
-  feedingPlan: '',
-  specialRequests: '',
-  skinToSkin: true,
-  cordClamping: true,
-  notes: '',
-};
-
-export const initialData: AppData = {
-  profile: emptyProfile,
-  bp: [],
-  weight: [],
-  appointments: [],
-  visits: [],
-  movements: [],
-  water: {},
-  bag: {},
-  birthPlan: emptyBirthPlan,
-  setupComplete: false,
-};
+export { initialData };
 
 export function buildAppointments(lmpISO: string, existing: Appointment[] = []): Appointment[] {
   const lmp = parseISODate(lmpISO);
@@ -114,20 +72,15 @@ interface AppStateValue {
   toggleBagItem: (id: string) => void;
   resetAll: () => void;
   loadSampleData: () => Promise<boolean>;
-  /** Device storage state (IndexedDB). */
+  /** Replaces the whole record, used when a backup file is restored. */
+  replaceAll: (next: AppData) => Promise<boolean>;
+  /** Local device storage (IndexedDB). There is no remote copy. */
   storage: {
     ready: boolean;
     persisted: boolean;
     error: string | null;
+    lastSavedAt: string | null;
     flush: () => Promise<boolean>;
-  };
-  /** Cloud sync state; local data is always kept when the cloud is unreachable. */
-  sync: {
-    status: SyncStatus;
-    lastSyncedAt: string | null;
-    errorKey: string | null;
-    restored: boolean;
-    retry: () => void;
   };
 }
 
@@ -191,7 +144,7 @@ function sampleData(): AppData {
     water: { [toISODate(today)]: 4 },
     bag: { 'bag-1': true, 'bag-2': true, 'bag-5': true, 'bag-9': true, 'bag-14': true },
     birthPlan: {
-      ...emptyBirthPlan,
+      ...initialData.birthPlan,
       birthPlace: 'Al-Amal Maternity Hospital',
       supportPerson: 'Husband',
       painRelief: 'Breathing techniques, then epidural if needed',
@@ -201,261 +154,143 @@ function sampleData(): AppData {
   };
 }
 
-export function AppStateProvider({
-  children,
-  scope = 'guest',
-}: {
-  children: ReactNode;
-  /** Signed-in accounts get their own storage bucket; guests keep the legacy key. */
-  scope?: string;
-}) {
-  const [data, setData, meta, flushStorage] = useIndexedState<AppData>(
-    dataStorageKey(scope),
-    initialData,
-  );
-  const userId = userIdFromScope(scope);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>(userId ? 'idle' : 'localOnly');
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [syncErrorKey, setSyncErrorKey] = useState<string | null>(null);
-  const [restored, setRestored] = useState(false);
+export function AppStateProvider({ children }: { children: ReactNode }) {
+  const [data, setData, meta, flushStorage] = useIndexedState<AppData>(LOCAL_DATA_KEY, initialData);
 
+  // Mutations build the next record from the newest value and flush it straight
+  // away, so a reload right after a save can never lose the change.
   const dataRef = useRef(data);
   dataRef.current = data;
-  const updatedAtRef = useRef<string | null>(meta.updatedAt);
-  updatedAtRef.current = meta.updatedAt;
-  const syncedJson = useRef<string | null>(null);
-  const syncArmed = useRef(false);
 
-  const push = useCallback(
-    async (payload: AppData) => {
-      if (!userId) return;
-      setSyncStatus('syncing');
-      setSyncErrorKey(null);
-      const result = await pushUserData(userId, payload);
-      if (result.ok) {
-        syncedJson.current = JSON.stringify(payload);
-        setSyncStatus('saved');
-        setSyncErrorKey(null);
-        setLastSyncedAt(result.updatedAt ?? new Date().toISOString());
-      } else {
-        setSyncStatus(result.errorKey === 'sync.errorOffline' ? 'offline' : 'error');
-        setSyncErrorKey(result.errorKey ?? 'sync.errorGeneric');
-      }
+  const commit = useCallback(
+    (next: AppData) => {
+      setData(next);
+      void flushStorage(next);
     },
-    [userId],
+    [setData, flushStorage],
   );
 
-  /** Pull the account's saved record, then push whatever is newer locally. */
-  const syncNow = useCallback(async () => {
-    if (!userId) return;
-    setSyncStatus('syncing');
-    setSyncErrorKey(null);
+  const replaceAll = useCallback(
+    (next: AppData) => {
+      setData(next);
+      return flushStorage(next);
+    },
+    [setData, flushStorage],
+  );
 
-    const remote = await pullUserData(userId);
-    if (!remote.ok) {
-      setSyncStatus(remote.errorKey === 'sync.errorOffline' ? 'offline' : 'error');
-      setSyncErrorKey(remote.errorKey ?? 'sync.errorGeneric');
-      return;
-    }
+  const updateProfile = useCallback(
+    (profile: Profile) => {
+      const next: AppData = {
+        ...dataRef.current,
+        profile,
+        appointments: buildAppointments(profile.lmp, dataRef.current.appointments),
+        setupComplete: Boolean(profile.lmp),
+      };
+      setData(next);
+      return flushStorage(next);
+    },
+    [setData, flushStorage],
+  );
 
-    if (remote.data && decideSync(updatedAtRef.current, remote.updatedAt) === 'pull') {
-      syncedJson.current = JSON.stringify(remote.data);
-      setData(remote.data);
-      setRestored(true);
-      setSyncStatus('saved');
-      setLastSyncedAt(remote.updatedAt ?? null);
-      return;
-    }
+  const loadSampleData = useCallback(() => {
+    const sample = sampleData();
+    setData(sample);
+    return flushStorage(sample);
+  }, [setData, flushStorage]);
 
-    if (!remote.data && !hasUserData(dataRef.current)) {
-      setSyncStatus('saved');
-      setLastSyncedAt(new Date().toISOString());
-      return;
-    }
+  const ga = useMemo(() => {
+    const lmp = parseISODate(data.profile.lmp);
+    return lmp ? gestationalAge(lmp) : null;
+  }, [data.profile.lmp]);
 
-    await push(dataRef.current);
-  }, [userId, setData, push]);
-
-  // Restore the account's saved record as soon as local storage is ready.
-  useEffect(() => {
-    if (!meta.ready) return;
-    if (!userId) {
-      syncArmed.current = false;
-      return;
-    }
-    let active = true;
-    syncArmed.current = false;
-    void syncNow().finally(() => {
-      if (active) syncArmed.current = true;
-    });
-    return () => {
-      active = false;
-    };
-  }, [meta.ready, userId, syncNow]);
-
-  // Push local edits shortly after they happen.
-  useEffect(() => {
-    if (!meta.ready || !userId || !syncArmed.current) return;
-    const json = JSON.stringify(data);
-    if (json === syncedJson.current) return;
-    const timer = setTimeout(() => void push(data), 1200);
-    return () => clearTimeout(timer);
-  }, [data, meta.ready, userId, push]);
-
-  // Last-chance flush when the tab is hidden or closed.
-  useEffect(() => {
-    if (!userId) return;
-    const flush = () => {
-      const json = JSON.stringify(dataRef.current);
-      if (json === syncedJson.current) return;
-      void pushUserData(userId, dataRef.current);
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flush();
-    };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [userId]);
+  const eddISO = useMemo(() => {
+    const lmp = parseISODate(data.profile.lmp);
+    return lmp ? toISODate(dueDateFromLMP(lmp)) : null;
+  }, [data.profile.lmp]);
 
   const value = useMemo<AppStateValue>(() => {
-    const lmp = parseISODate(data.profile.lmp);
-    const ga = lmp ? gestationalAge(lmp) : null;
-    const eddISO = lmp ? toISODate(dueDateFromLMP(lmp)) : null;
-
+    const currentWeek = ga ? clampWeek(ga.weeks) : 0;
     return {
       data,
       ga,
       eddISO,
-      currentWeek: ga ? clampWeek(Math.floor(ga.totalDays / 7) || 1) : 1,
+      currentWeek,
       progress: ga ? progressPercent(ga.totalDays) : 0,
       daysLeft: ga ? daysRemaining(ga.totalDays) : 0,
-
-      updateProfile: (profile) => {
-        const next: AppData = {
-          ...dataRef.current,
-          profile,
-          appointments: buildAppointments(profile.lmp, dataRef.current.appointments),
-          setupComplete: Boolean(profile.lmp),
-        };
-        setData(next);
-        return flushStorage(next);
-      },
-
-      setBirthPlan: (birthPlan) => setData((previous) => ({ ...previous, birthPlan })),
-
+      updateProfile,
+      replaceAll,
+      setBirthPlan: (plan) => commit({ ...dataRef.current, birthPlan: plan }),
       addBP: (reading) =>
-        setData((previous) => ({
-          ...previous,
-          bp: [...previous.bp, { ...reading, id: createId('bp') }].sort((a, b) =>
-            a.date < b.date ? 1 : -1,
-          ),
-        })),
-
+        commit({
+          ...dataRef.current,
+          bp: [{ id: createId('bp'), ...reading }, ...dataRef.current.bp],
+        }),
       removeBP: (id) =>
-        setData((previous) => ({ ...previous, bp: previous.bp.filter((item) => item.id !== id) })),
-
+        commit({ ...dataRef.current, bp: dataRef.current.bp.filter((item) => item.id !== id) }),
       addWeight: (entry) =>
-        setData((previous) => ({
-          ...previous,
-          weight: [...previous.weight, { ...entry, id: createId('w') }].sort((a, b) =>
-            a.date < b.date ? 1 : -1,
-          ),
-        })),
-
+        commit({
+          ...dataRef.current,
+          weight: [{ id: createId('w'), ...entry }, ...dataRef.current.weight],
+        }),
       removeWeight: (id) =>
-        setData((previous) => ({
-          ...previous,
-          weight: previous.weight.filter((item) => item.id !== id),
-        })),
-
+        commit({
+          ...dataRef.current,
+          weight: dataRef.current.weight.filter((item) => item.id !== id),
+        }),
       toggleAppointment: (id) =>
-        setData((previous) => ({
-          ...previous,
-          appointments: previous.appointments.map((item) =>
+        commit({
+          ...dataRef.current,
+          appointments: dataRef.current.appointments.map((item) =>
             item.id === id ? { ...item, done: !item.done } : item,
           ),
-        })),
-
+        }),
       addVisit: (visit) =>
-        setData((previous) => ({
-          ...previous,
-          visits: [{ ...visit, id: createId('v') }, ...previous.visits],
-        })),
-
+        commit({
+          ...dataRef.current,
+          visits: [{ id: createId('v'), ...visit }, ...dataRef.current.visits],
+        }),
       removeVisit: (id) =>
-        setData((previous) => ({
-          ...previous,
-          visits: previous.visits.filter((item) => item.id !== id),
-        })),
-
+        commit({
+          ...dataRef.current,
+          visits: dataRef.current.visits.filter((item) => item.id !== id),
+        }),
       addMovement: (session) =>
-        setData((previous) => ({
-          ...previous,
-          movements: [{ ...session, id: createId('m') }, ...previous.movements],
-        })),
-
+        commit({
+          ...dataRef.current,
+          movements: [{ id: createId('m'), ...session }, ...dataRef.current.movements],
+        }),
       removeMovement: (id) =>
-        setData((previous) => ({
-          ...previous,
-          movements: previous.movements.filter((item) => item.id !== id),
-        })),
-
+        commit({
+          ...dataRef.current,
+          movements: dataRef.current.movements.filter((item) => item.id !== id),
+        }),
       setWater: (dateISO, glasses) =>
-        setData((previous) => ({
-          ...previous,
-          water: { ...previous.water, [dateISO]: Math.max(0, glasses) },
-        })),
-
+        commit({
+          ...dataRef.current,
+          water: {
+            ...dataRef.current.water,
+            [dateISO]: Math.max(0, Math.min(40, Math.round(glasses))),
+          },
+        }),
       toggleBagItem: (id) =>
-        setData((previous) => ({
-          ...previous,
-          bag: { ...previous.bag, [id]: !previous.bag[id] },
-        })),
-
-      resetAll: () => {
-        setData(initialData);
-        void flushStorage(initialData);
-      },
-
-      loadSampleData: () => {
-        const sample = sampleData();
-        setData(sample);
-        return flushStorage(sample);
-      },
-
+        commit({
+          ...dataRef.current,
+          bag: { ...dataRef.current.bag, [id]: !dataRef.current.bag[id] },
+        }),
+      resetAll: () => commit(initialData),
+      loadSampleData,
       storage: {
         ready: meta.ready,
         persisted: meta.persisted,
         error: meta.error,
+        lastSavedAt: meta.updatedAt,
         flush: () => flushStorage(),
       },
-      sync: {
-        status: syncStatus,
-        lastSyncedAt,
-        errorKey: syncErrorKey,
-        restored,
-        retry: () => void syncNow(),
-      },
     };
-  }, [
-    data,
-    setData,
-    syncStatus,
-    lastSyncedAt,
-    syncErrorKey,
-    restored,
-    syncNow,
-    flushStorage,
-    meta.ready,
-    meta.persisted,
-    meta.error,
-  ]);
+  }, [data, ga, eddISO, commit, updateProfile, replaceAll, loadSampleData, flushStorage, meta.ready, meta.persisted, meta.error, meta.updatedAt]);
 
-  // Never render a half-hydrated record: it would flash the setup screen.
+  // Wait for the IndexedDB read before rendering, otherwise a returning visitor
+  // would briefly see the setup screen instead of their saved record.
   if (!meta.ready) {
     return (
       <div className="boot-screen" role="status" aria-live="polite">
@@ -470,6 +305,8 @@ export function AppStateProvider({
 
 export function useAppState(): AppStateValue {
   const context = useContext(AppStateContext);
-  if (!context) throw new Error('useAppState must be used within AppStateProvider');
+  if (!context) {
+    throw new Error('useAppState must be used inside AppStateProvider');
+  }
   return context;
 }
