@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Pregnancy Companion - رفيقة الحامل: bilingual pregnancy education and maternal safety companion",
+  "description": "RIFQAH (رِفْقَة) - رفيقة الحامل: bilingual pregnancy education and maternal safety companion",
   "engines": {
     "node": ">=22.12"
   },

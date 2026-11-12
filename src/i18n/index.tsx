@@ -409,8 +409,8 @@ export const ui: Record<string, Bi> = {
   },
   'profile.about': { ar: 'عن التطبيق', en: 'About' },
   'profile.aboutText': {
-    ar: 'رفيقة الحامل تطبيق تعليمي لمشروع جامعي في تمريض النساء والتوليد، يهدف إلى دعم الحامل بالمعلومات والتتبع الذاتي.',
-    en: 'Pregnancy Companion is an educational application for a university Gynecology and Maternity Nursing project that supports pregnant women with information and self-tracking.',
+    ar: 'رِفْقَة تطبيق تعليمي لمشروع جامعي في تمريض النساء والتوليد، يهدف إلى دعم الحامل بالمعلومات والتتبع الذاتي.',
+    en: 'RIFQAH is an educational application for a university Gynecology and Maternity Nursing project that supports pregnant women with information and self-tracking.',
   },
   'profile.references': { ar: 'المراجع العلمية', en: 'References' },
   'profile.version': { ar: 'الإصدار', en: 'Version' },
