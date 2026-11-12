@@ -433,7 +433,7 @@ export function Antenatal() {
                 <tr key={test.id}>
                   <td style={{ fontWeight: 700 }}>{pick(test.name)}</td>
                   <td className="small muted">{pick(test.timing)}</td>
-                  <td className="small muted">{pick(test.why ?? test.purpose)}</td>
+                  <td className="small muted">{pick(test.purpose)}</td>
                 </tr>
               ))}
             </tbody>
