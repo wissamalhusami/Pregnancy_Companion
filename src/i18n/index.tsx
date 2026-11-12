@@ -8,14 +8,14 @@ import {
 } from 'react';
 import type { Bi, Lang } from '../lib/types';
 import { useStoredState } from '../lib/storage';
-import { authStrings } from './authStrings';
+
 
 /**
  * Bilingual UI dictionary. Every key holds both languages so the two
  * versions can never drift apart; `pick` resolves data-level content.
  */
 export const ui: Record<string, Bi> = {
-  ...authStrings,
+
   'app.name': { ar: 'رِفْقَة', en: 'RIFQAH' },
   'app.tagline': {
     ar: 'رحلتكِ نحو أمومة آمنة.',
@@ -44,6 +44,15 @@ export const ui: Record<string, Bi> = {
   'common.empty': { ar: 'لا توجد بيانات مسجلة بعد', en: 'No records yet' },
   'common.saved': { ar: 'تم الحفظ', en: 'Saved' },
   'common.saving': { ar: 'جارٍ الحفظ…', en: 'Saving…' },
+
+  // Navigation groups (the app has no account section any more).
+  'nav.groupMain': { ar: 'الرئيسية', en: 'Overview' },
+  'nav.groupSafety': { ar: 'السلامة', en: 'Safety' },
+  'nav.groupCare': { ar: 'الرعاية والتحضير', en: 'Care & preparation' },
+  'nav.groupProfile': { ar: 'ملفي وبياناتي', en: 'Profile & data' },
+
+  // Local-only storage messaging.
+  'storage.localOnly': { ar: 'محفوظ على جهازكِ', en: 'Saved on this device' },
 
   // Storage + cloud sync status (IndexedDB primary, Supabase when online).
   'storage.loading': { ar: 'جارٍ تحميل بياناتكِ المحفوظة…', en: 'Loading your saved data…' },
@@ -454,6 +463,56 @@ export const ui: Record<string, Bi> = {
   'profile.references': { ar: 'المراجع العلمية', en: 'References' },
   'profile.version': { ar: 'الإصدار', en: 'Version' },
   'profile.updated': { ar: 'تم تحديث بيانات الملف', en: 'Profile updated' },
+  'profile.localTitle': { ar: 'بياناتكِ على جهازكِ فقط', en: 'Your data stays on this device' },
+  'profile.localBody': {
+    ar: 'كل ما تسجّلينه يُحفظ داخل متصفحكِ على هذا الجهاز فقط، ولا يُرسل إلى أي خادم. أنشئي نسخة احتياطية قبل تغيير الجهاز أو مسح بيانات المتصفح.',
+    en: 'Everything you record is stored in this browser on this device only and is never sent to a server. Create a backup before changing devices or clearing browser data.',
+  },
+
+  // Backup file (export / import) — the only way to move data between devices.
+  'backup.title': { ar: 'النسخة الاحتياطية', en: 'Backup' },
+  'backup.body': {
+    ar: 'احفظي نسخة من بياناتكِ في ملف، أو استعيديها على جهاز آخر. الملف يُنشأ على جهازكِ ولا يُرفع إلى أي خادم.',
+    en: 'Save your data to a file, or restore it on another device. The file is created on your device and is never uploaded.',
+  },
+  'backup.export': { ar: 'تصدير نسخة احتياطية', en: 'Export backup' },
+  'backup.import': { ar: 'استيراد نسخة احتياطية', en: 'Import backup' },
+  'backup.exportDone': { ar: 'تم تنزيل ملف النسخة الاحتياطية.', en: 'Backup file downloaded.' },
+  'backup.importReady': { ar: 'الملف جاهز للاستعادة:', en: 'File ready to restore:' },
+  'backup.importNote': {
+    ar: 'سيتم استبدال البيانات المحفوظة على هذا الجهاز بالبيانات الموجودة في الملف.',
+    en: 'The data saved on this device will be replaced by the data in the file.',
+  },
+  'backup.importConfirm': { ar: 'استبدال بياناتي', en: 'Replace my data' },
+  'backup.importCancel': { ar: 'إلغاء', en: 'Cancel' },
+  'backup.importDone': { ar: 'تمت استعادة بياناتكِ بنجاح.', en: 'Your data was restored.' },
+  'backup.errorEmpty': { ar: 'الملف فارغ.', en: 'The file is empty.' },
+  'backup.errorInvalid': {
+    ar: 'هذا الملف ليس ملف JSON صالحًا.',
+    en: 'This file is not valid JSON.',
+  },
+  'backup.errorFormat': {
+    ar: 'هذا الملف ليس نسخة احتياطية من رِفْقَة.',
+    en: 'This file is not a RIFQAH backup.',
+  },
+  'backup.errorVersion': {
+    ar: 'أُنشئ هذا الملف بإصدار أحدث من التطبيق، فحدّثي التطبيق ثم أعيدي المحاولة.',
+    en: 'This file was created by a newer app version. Update the app and try again.',
+  },
+  'backup.errorStructure': {
+    ar: 'لا يحتوي الملف على بيانات حمل صالحة (تاريخ آخر دورة شهرية).',
+    en: 'The file has no valid pregnancy record (LMP date).',
+  },
+  'backup.errorTooLarge': { ar: 'حجم الملف كبير جدًا.', en: 'The file is too large.' },
+  'backup.errorRead': { ar: 'تعذّرت قراءة الملف.', en: 'The file could not be read.' },
+  'backup.errorWrite': {
+    ar: 'تعذّر حفظ البيانات على هذا الجهاز. تأكدي من توفر مساحة تخزين.',
+    en: 'Saving to this device failed. Check available storage space.',
+  },
+  'backup.counts': {
+    ar: 'المواعيد: {anc} · الضغط: {bp} · الوزن: {weight} · الزيارات: {visits} · الحركة: {movement}',
+    en: 'Appointments: {anc} · BP: {bp} · Weight: {weight} · Visits: {visits} · Movement: {movement}',
+  },
 };
 
 type LangContextValue = {

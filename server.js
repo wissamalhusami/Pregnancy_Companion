@@ -15,25 +15,10 @@ app.get('/api/health', (_req, res) => {
 });
 
 /**
- * Public Supabase client configuration for the browser.
- *
- * Only the public anon key is ever returned: it is safe to ship to a browser and
- * Supabase Row Level Security protects the data. The service-role key is never
- * read here, so it can never be exposed through this endpoint.
+ * RIFQAH is local-first: all health data stays in the browser's IndexedDB.
+ * The server only delivers static files, so there is no data or auth endpoint
+ * and no credential is read from the environment.
  */
-app.get('/api/config', (_req, res) => {
-  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
-  const supabaseAnonKey = (
-    process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
-  ).trim();
-  res.setHeader('Cache-Control', 'no-store');
-  res.json({
-    supabaseUrl,
-    supabaseAnonKey,
-    configured: Boolean(supabaseUrl && supabaseAnonKey),
-  });
-});
-
 app.use(
   express.static(distDir, {
     index: 'index.html',

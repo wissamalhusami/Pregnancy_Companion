@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useLang } from '../i18n';
-import { useAuth } from '../state/AuthContext';
+import { useAppState } from '../state/AppState';
 import { BrandLockup } from './Logo';
 import { Icon, type IconName } from './Icon';
 import { educationalDisclaimer } from '../data/references';
-import { initialsOf } from '../lib/auth';
-import { SyncBadge } from './SyncBadge';
+import { initialsOf } from '../lib/format';
 
 interface NavItem {
   to: string;
@@ -67,46 +65,19 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   );
 }
 
-/** Avatar with provider image fallback to initials. */
-function AccountAvatar({ size = 36 }: { size?: number }) {
-  const { user } = useAuth();
-  const [broken, setBroken] = useState(false);
-  const initials = initialsOf(user?.name || user?.email || 'R');
-  const showImage = Boolean(user?.avatarUrl) && !broken;
-
+/** Monogram avatar for the single local profile (no account, no photo upload). */
+function ProfileAvatar({ name, size = 36 }: { name: string; size?: number }) {
   return (
     <span className="avatar" style={{ inlineSize: size, blockSize: size }} aria-hidden="true">
-      {showImage ? (
-        <img
-          src={user?.avatarUrl ?? ''}
-          alt=""
-          referrerPolicy="no-referrer"
-          onError={() => setBroken(true)}
-        />
-      ) : (
-        <span className="avatar-initials">{initials}</span>
-      )}
+      <span className="avatar-initials">{initialsOf(name)}</span>
     </span>
   );
 }
 
 export function Layout({ children }: { children: ReactNode }) {
   const { t, lang, toggleLang, pick } = useLang();
-  const { configured, user, signOut } = useAuth();
+  const { data } = useAppState();
   const location = useLocation();
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  // Close the account menu whenever the route changes.
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
-
-  const handleSignOut = async () => {
-    await signOut();
-    setMenuOpen(false);
-    navigate('/welcome', { replace: true });
-  };
 
   return (
     <div className="app-shell">
@@ -120,14 +91,10 @@ export function Layout({ children }: { children: ReactNode }) {
         </NavLink>
 
         <div className="header-actions">
-          <SyncBadge />
-
-          {!configured && (
-            <span className="chip chip-soft header-mode" title={t('auth.guestNoticeBody')}>
-              <Icon name="shield" size={13} />
-              {t('nav.guest')}
-            </span>
-          )}
+          <span className="chip chip-soft header-mode" title={t('profile.localBody')}>
+            <Icon name="shield" size={13} />
+            {t('storage.localOnly')}
+          </span>
 
           <button
             type="button"
@@ -139,71 +106,15 @@ export function Layout({ children }: { children: ReactNode }) {
             {lang === 'ar' ? 'English' : 'العربية'}
           </button>
 
-          {configured && !user && (
-            <NavLink className="btn btn-sm header-signin" to="/auth/login">
-              {t('nav.signIn')}
-            </NavLink>
-          )}
-
-          <div className="account-menu">
-            <button
-              type="button"
-              className="account-trigger"
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-expanded={menuOpen}
-              aria-haspopup="menu"
-              aria-label={t('nav.account')}
-            >
-              <AccountAvatar />
-              <span className="account-trigger-text">
-                <span className="account-trigger-name">
-                  {user ? user.name || user.email : t('nav.account')}
-                </span>
-                <span className="account-trigger-sub">
-                  {user ? user.email : t('auth.guestNotice')}
-                </span>
+          <NavLink className="account-trigger" to="/profile" aria-label={t('nav.profile')}>
+            <ProfileAvatar name={data.profile.name} />
+            <span className="account-trigger-text">
+              <span className="account-trigger-name">
+                {data.profile.name || t('nav.profile')}
               </span>
-              <Icon name="chevronDown" size={15} className="account-caret" />
-            </button>
-
-            {menuOpen && (
-              <div className="account-pop" role="menu">
-                {user && (
-                  <div className="account-pop-head">
-                    <AccountAvatar size={40} />
-                    <div>
-                      <strong>{user.name || user.email}</strong>
-                      <span className="tiny muted">{user.email}</span>
-                    </div>
-                  </div>
-                )}
-                <NavLink className="account-pop-item" role="menuitem" to="/profile">
-                  <Icon name="user" size={16} />
-                  {t('nav.profile')}
-                </NavLink>
-                <NavLink className="account-pop-item" role="menuitem" to="/setup">
-                  <Icon name="settings" size={16} />
-                  {t('nav.setup')}
-                </NavLink>
-                {user ? (
-                  <button
-                    type="button"
-                    className="account-pop-item danger"
-                    role="menuitem"
-                    onClick={() => void handleSignOut()}
-                  >
-                    <Icon name="logout" size={16} />
-                    {t('nav.signOut')}
-                  </button>
-                ) : (
-                  <NavLink className="account-pop-item" role="menuitem" to="/auth/login">
-                    <Icon name="user" size={16} />
-                    {t('nav.signIn')}
-                  </NavLink>
-                )}
-              </div>
-            )}
-          </div>
+              <span className="account-trigger-sub">{t('storage.localOnly')}</span>
+            </span>
+          </NavLink>
         </div>
       </header>
 
@@ -213,16 +124,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavGroup label={t('nav.groupSafety')} items={safetyNav} />
           <NavGroup label={t('nav.groupCare')} items={careNav} />
           <NavGroup
-            label={t('nav.groupAccount')}
+            label={t('nav.groupProfile')}
             items={[{ to: '/profile', labelKey: 'nav.profile', icon: 'user' }]}
           />
-
-          {user && (
-            <button type="button" className="sidebar-signout" onClick={() => void handleSignOut()}>
-              <Icon name="logout" size={17} />
-              {t('nav.signOut')}
-            </button>
-          )}
 
           <div className="sidebar-note">
             <Icon name="shield" size={14} />
