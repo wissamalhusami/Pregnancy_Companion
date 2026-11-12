@@ -1,406 +1,428 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLang } from '../i18n';
 import { useAppState } from '../state/AppState';
-import { useAuth } from '../state/AuthContext';
 import { references } from '../data/references';
-import { formatDate, toISODate } from '../lib/pregnancy';
-import { initialsOf, providerLabel, validateName } from '../lib/auth';
+import { formatDate } from '../lib/pregnancy';
+import { initialsOf } from '../lib/format';
+import { backupFileName, backupSummary, parseBackup, serializeBackup } from '../lib/backup';
 import { Card, Disclaimer } from '../components/ui';
 import { Icon } from '../components/Icon';
+import type { AppData } from '../lib/types';
+
+/** Triggers a download of a text file without touching the network. */
+function downloadFile(name: string, text: string) {
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoke on the next tick so the download has started.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export function Profile() {
-  const { t, lang, setLang } = useLang();
-  const navigate = useNavigate();
-  const { data, updateProfile, resetAll, loadSampleData } = useAppState();
-  const {
-    user: account,
-    configured: authConfigured,
-    busy: authBusy,
-    updateProfile: saveAccountProfile,
-    sendReset,
-    signOut,
-  } = useAuth();
+  const { t, lang, toggleLang } = useLang();
+  const { data, updateProfile, replaceAll, resetAll, loadSampleData, storage, ga, eddISO } =
+    useAppState();
 
   const [name, setName] = useState(data.profile.name);
   const [lmp, setLmp] = useState(data.profile.lmp);
   const [weight, setWeight] = useState(
     data.profile.prePregnancyWeightKg ? String(data.profile.prePregnancyWeightKg) : '',
   );
-  const [height, setHeight] = useState(data.profile.heightCm ? String(data.profile.heightCm) : '');
+  const [height, setHeight] = useState(
+    data.profile.heightCm ? String(data.profile.heightCm) : '',
+  );
   const [clinic, setClinic] = useState(data.profile.clinic);
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
-  // Account fields are kept separate from the pregnancy profile so a name change
-  // on the account never silently rewrites the medical record.
-  const [accountName, setAccountName] = useState(account?.name ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(account?.avatarUrl ?? '');
-  const [accountError, setAccountError] = useState('');
-  const [accountSaved, setAccountSaved] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
-
+  // Restoring a backup replaces the whole record, so the form follows it.
   useEffect(() => {
-    setAccountName(account?.name ?? '');
-    setAvatarUrl(account?.avatarUrl ?? '');
-  }, [account?.name, account?.avatarUrl]);
+    setName(data.profile.name);
+    setLmp(data.profile.lmp);
+    setWeight(data.profile.prePregnancyWeightKg ? String(data.profile.prePregnancyWeightKg) : '');
+    setHeight(data.profile.heightCm ? String(data.profile.heightCm) : '');
+    setClinic(data.profile.clinic);
+  }, [data.profile]);
 
-  const save = (event: React.FormEvent) => {
+  const [exported, setExported] = useState(false);
+  const [importDone, setImportDone] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [pending, setPending] = useState<AppData | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    updateProfile({
+    if (!name.trim()) {
+      setError(t('setup.errorName'));
+      return;
+    }
+    if (!lmp) {
+      setError(t('setup.errorLmp'));
+      return;
+    }
+    setError('');
+    setSaving(true);
+    const ok = await updateProfile({
+      ...data.profile,
       name: name.trim(),
       lmp,
       prePregnancyWeightKg: weight ? Number(weight) : null,
       heightCm: height ? Number(height) : null,
       clinic: clinic.trim(),
     });
+    setSaving(false);
+    if (!ok) {
+      setError(t('backup.errorWrite'));
+      return;
+    }
     setSaved(true);
-    window.setTimeout(() => setSaved(false), 2500);
+    setTimeout(() => setSaved(false), 2500);
   };
 
-  const exportData = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `pregnancy-companion-${toISODate(new Date())}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    // Make sure the newest edits are on disk before the file is built.
+    await storage.flush();
+    downloadFile(backupFileName(), serializeBackup(data));
+    setExported(true);
+    setTimeout(() => setExported(false), 3000);
   };
 
-  const clearAll = () => {
-    resetAll();
-    setConfirmClear(false);
-    navigate('/setup');
-  };
-
-  const submitAccount = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const validation = validateName(accountName);
-    if (!validation.ok) {
-      setAccountError(validation.errorKey ?? 'auth.errorName');
+  const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    setImportError(null);
+    setImportDone(false);
+    setPending(null);
+    if (!file) return;
+    if (file.size > 5_000_000) {
+      setImportError('backup.errorTooLarge');
       return;
     }
-    setAccountError('');
-    const result = await saveAccountProfile({
-      name: accountName.trim(),
-      avatarUrl: avatarUrl.trim() || null,
-    });
-    if (!result.ok) {
-      setAccountError(result.errorKey ?? 'auth.errorGeneric');
+    try {
+      const result = parseBackup(await file.text());
+      if (!result.ok) {
+        setImportError(result.errorKey);
+        return;
+      }
+      setPending(result.data);
+    } catch {
+      setImportError('backup.errorRead');
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!pending) return;
+    const ok = await replaceAll(pending);
+    if (!ok) {
+      setImportError('backup.errorWrite');
       return;
     }
-    setAccountSaved(true);
-    window.setTimeout(() => setAccountSaved(false), 2500);
+    setPending(null);
+    setImportDone(true);
+    setTimeout(() => setImportDone(false), 4000);
   };
 
-  // Language is remembered on the account as well as locally, so a fresh device
-  // restores the same preference after signing in.
-  const chooseLanguage = (next: 'ar' | 'en') => {
-    setLang(next);
-    if (account) void saveAccountProfile({ language: next });
-  };
-
-  const requestReset = async () => {
-    if (!account?.email) return;
-    const result = await sendReset(account.email);
-    if (result.ok) setResetSent(true);
-  };
+  const summary = pending ? backupSummary(pending) : null;
 
   return (
-    <div>
+    <div className="page">
       <header className="page-head">
-        <div>
-          <h1 className="page-title">{t('profile.title')}</h1>
-          <p className="page-sub">{t('profile.subtitle')}</p>
-        </div>
+        <h1 className="page-title">{t('profile.title')}</h1>
+        <p className="page-sub">{t('profile.subtitle')}</p>
       </header>
 
-      <Card title={t('profile.account')} icon="user">
-        {account ? (
-          <div className="account-panel">
-            <div className="account-identity">
-              {account.avatarUrl ? (
-                <img
-                  className="account-avatar-img"
-                  src={account.avatarUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="account-avatar-fallback" aria-hidden="true">
-                  {initialsOf(account.name || account.email)}
-                </span>
-              )}
-              <div>
-                <p className="account-name">{account.name || account.email}</p>
-                <p className="tiny muted">{account.email}</p>
-                <div className="chip-row" style={{ marginBlockStart: 6 }}>
-                  <span className="chip">{providerLabel(account.provider)}</span>
-                  {account.createdAt && (
-                    <span className="chip">
-                      {t('profile.memberSince')}: {formatDate(new Date(account.createdAt), lang)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+      <div className="profile-hero">
+        <span className="avatar avatar-lg" aria-hidden="true">
+          <span className="avatar-initials">{initialsOf(data.profile.name)}</span>
+        </span>
+        <div>
+          <strong className="profile-name">{data.profile.name || t('nav.profile')}</strong>
+          <p className="tiny muted">
+            {ga ? `${ga.weeks} ${t('common.weeks')} · ${ga.days} ${t('common.days')}` : t('setup.title')}
+            {eddISO ? ` · ${t('dashboard.edd')}: ${formatDate(eddISO, lang)}` : ''}
+          </p>
+        </div>
+        <span className="chip chip-soft">
+          <Icon name="shield" size={13} />
+          {t('storage.localOnly')}
+        </span>
+      </div>
 
-            <form onSubmit={submitAccount} className="form-grid" style={{ marginBlockStart: 16 }}>
-              <div className="field">
-                <label htmlFor="account-name">{t('profile.displayName')}</label>
-                <input
-                  id="account-name"
-                  value={accountName}
-                  onChange={(event) => setAccountName(event.target.value)}
-                  autoComplete="name"
-                  maxLength={120}
-                />
-                {accountError && <span className="field-error">{t(accountError)}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="account-avatar">{t('profile.avatar')}</label>
-                <input
-                  id="account-avatar"
-                  type="url"
-                  value={avatarUrl}
-                  onChange={(event) => setAvatarUrl(event.target.value)}
-                  placeholder="https://…"
-                />
-                <span className="tiny muted">{t('profile.avatarHint')}</span>
-              </div>
-              <div className="span-2 row-actions">
-                <button type="submit" className="btn" disabled={authBusy}>
-                  <Icon name="check" size={16} />
-                  {authBusy ? t('common.loading') : t('common.save')}
-                </button>
-                {accountSaved && (
-                  <span className="chip ok" role="status">
-                    {t('profile.accountSaved')}
-                  </span>
-                )}
-              </div>
-            </form>
-
-            <div className="row-actions" style={{ marginBlockStart: 10 }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void requestReset()}
-                disabled={authBusy}
-              >
-                <Icon name="shield" size={16} />
-                {t('profile.sendReset')}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => void signOut()}>
-                <Icon name="logout" size={16} />
-                {t('auth.logout')}
-              </button>
-            </div>
-            {resetSent && (
-              <p className="chip ok" role="status" style={{ marginBlockStart: 10 }}>
-                {t('profile.resetSent')}
-              </p>
-            )}
+      <Card title={t('profile.personal')} icon="user">
+        <form className="form" onSubmit={submit}>
+          <div className="form-row">
+            <label htmlFor="name">{t('setup.name')}</label>
+            <input
+              id="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              autoComplete="off"
+            />
           </div>
-        ) : (
-          <div className="account-guest">
-            <p className="small">
-              <strong>{t('profile.guestTitle')}</strong>
-            </p>
-            <p className="small muted">
-              {authConfigured ? t('profile.guestBody') : t('auth.notConfiguredBody')}
-            </p>
-            <div className="row-actions" style={{ marginBlockStart: 10 }}>
-              <Link className="btn" to="/auth">
-                {t('nav.signIn')}
-              </Link>
-            </div>
+          <div className="form-row">
+            <label htmlFor="lmp">{t('setup.lmp')}</label>
+            <input
+              id="lmp"
+              type="date"
+              value={lmp}
+              onChange={(event) => setLmp(event.target.value)}
+            />
+            <p className="help">{t('setup.lmpHelp')}</p>
           </div>
-        )}
-      </Card>
-
-      <div className="split">
-        <Card title={t('profile.personal')} icon="user">
-          <form onSubmit={save} className="form-grid">
-            <div className="field span-2">
-              <label htmlFor="p-name">{t('setup.name')}</label>
+          <div className="form-grid">
+            <div className="form-row">
+              <label htmlFor="weight">{t('setup.weight')}</label>
               <input
-                id="p-name"
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-              />
-            </div>
-            <div className="field span-2">
-              <label htmlFor="p-lmp">{t('setup.lmp')}</label>
-              <input
-                id="p-lmp"
-                type="date"
-                value={lmp}
-                max={toISODate(new Date())}
-                onChange={(event) => setLmp(event.target.value)}
-                required
-              />
-              <span className="hint">{t('setup.lmpHelp')}</span>
-            </div>
-            <div className="field">
-              <label htmlFor="p-weight">{t('setup.weight')}</label>
-              <input
-                id="p-weight"
+                id="weight"
                 type="number"
+                min="30"
+                max="200"
                 step="0.1"
-                min={30}
-                max={250}
                 value={weight}
                 onChange={(event) => setWeight(event.target.value)}
               />
             </div>
-            <div className="field">
-              <label htmlFor="p-height">{t('setup.height')}</label>
+            <div className="form-row">
+              <label htmlFor="height">{t('setup.height')}</label>
               <input
-                id="p-height"
+                id="height"
                 type="number"
-                min={100}
-                max={220}
+                min="120"
+                max="220"
+                step="1"
                 value={height}
                 onChange={(event) => setHeight(event.target.value)}
               />
             </div>
-            <div className="field span-2">
-              <label htmlFor="p-clinic">{t('setup.clinic')}</label>
-              <input
-                id="p-clinic"
-                type="text"
-                value={clinic}
-                onChange={(event) => setClinic(event.target.value)}
-                placeholder={t('common.optional')}
-              />
-            </div>
-            <div className="span-2 row-actions">
-              <button type="submit" className="btn">
-                <Icon name="check" size={16} />
-                {t('common.save')}
-              </button>
-              {saved && (
-                <span className="chip ok" role="status">
-                  {t('common.saved')}
-                </span>
-              )}
-            </div>
-          </form>
-        </Card>
+          </div>
+          <div className="form-row">
+            <label htmlFor="clinic">{t('setup.clinic')}</label>
+            <input
+              id="clinic"
+              value={clinic}
+              onChange={(event) => setClinic(event.target.value)}
+            />
+          </div>
 
-        <div style={{ display: 'grid', gap: 16 }}>
-          <Card title={t('profile.language')} icon="globe">
-            <div className="row-actions">
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              <Icon name="alert" size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="row-actions">
+            <button type="submit" className="btn" disabled={saving} aria-busy={saving}>
+              <Icon name="check" size={16} />
+              {saving ? t('common.saving') : t('setup.submit')}
+            </button>
+            {saved && (
+              <span className="chip chip-ok" role="status">
+                <Icon name="check" size={13} />
+                {t('profile.updated')}
+              </span>
+            )}
+            <Link className="btn btn-ghost" to="/setup">
+              <Icon name="calendar" size={16} />
+              {t('setup.title')}
+            </Link>
+          </div>
+        </form>
+      </Card>
+
+      <Card title={t('backup.title')} icon="download">
+        <p className="muted">{t('backup.body')}</p>
+        <div className="row-actions" style={{ marginBlockStart: 12 }}>
+          <button type="button" className="btn" onClick={() => void handleExport()}>
+            <Icon name="download" size={16} />
+            {t('backup.export')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => fileInput.current?.click()}
+          >
+            <Icon name="reset" size={16} />
+            {t('backup.import')}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            aria-label={t('backup.import')}
+            onChange={(event) => void handleFile(event)}
+          />
+        </div>
+
+        {exported && (
+          <p className="chip chip-ok" role="status">
+            <Icon name="check" size={13} />
+            {t('backup.exportDone')}
+          </p>
+        )}
+
+        {importError && (
+          <div className="alert alert-danger" role="alert">
+            <Icon name="alert" size={16} />
+            <span>{t(importError)}</span>
+          </div>
+        )}
+
+        {pending && summary && (
+          <div className="alert alert-info" role="status">
+            <Icon name="info" size={16} />
+            <div>
+              <strong>{t('backup.importReady')}</strong>
+              <p className="tiny">
+                {pending.profile.name || '—'}
+                {pending.profile.lmp ? ` · ${pending.profile.lmp}` : ''}
+              </p>
+              <p className="tiny muted">
+                {t('backup.counts', {
+                  anc: String(pending.appointments.length),
+                  bp: String(summary.readings),
+                  weight: String(summary.weights),
+                  visits: String(summary.visits),
+                  movement: String(summary.movements),
+                })}
+              </p>
+              <p className="tiny">{t('backup.importNote')}</p>
+              <div className="row-actions">
+                <button type="button" className="btn btn-sm" onClick={() => void confirmImport()}>
+                  <Icon name="check" size={14} />
+                  {t('backup.importConfirm')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => setPending(null)}
+                >
+                  <Icon name="close" size={14} />
+                  {t('backup.importCancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {importDone && (
+          <p className="chip chip-ok" role="status">
+            <Icon name="check" size={13} />
+            {t('backup.importDone')}
+          </p>
+        )}
+      </Card>
+
+      <Card title={t('profile.language')} icon="globe">
+        <p className="muted">{t('profile.language')}</p>
+        <div className="row-actions">
+          <button
+            type="button"
+            className={`btn btn-sm${lang === 'ar' ? '' : ' btn-ghost'}`}
+            aria-pressed={lang === 'ar'}
+            onClick={() => {
+              if (lang !== 'ar') toggleLang();
+            }}
+          >
+            {t('profile.arabic')}
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm${lang === 'en' ? '' : ' btn-ghost'}`}
+            aria-pressed={lang === 'en'}
+            onClick={() => {
+              if (lang !== 'en') toggleLang();
+            }}
+          >
+            {t('profile.english')}
+          </button>
+        </div>
+      </Card>
+
+      <Card title={t('profile.localTitle')} icon="shield">
+        <p className="muted">{t('profile.localBody')}</p>
+        <p className="tiny muted">{t('setup.privacyText')}</p>
+      </Card>
+
+      <Card title={t('profile.data')} icon="book">
+        <div className="row-actions">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => void loadSampleData()}
+          >
+            <Icon name="sparkles" size={16} />
+            {t('profile.sample')}
+          </button>
+          {confirmClear ? (
+            <>
               <button
                 type="button"
-                className={`btn ${lang === 'ar' ? '' : 'btn-ghost'}`}
-                onClick={() => chooseLanguage('ar')}
+                className="btn btn-danger"
+                onClick={() => {
+                  resetAll();
+                  setConfirmClear(false);
+                }}
               >
-                {t('profile.arabic')}
-              </button>
-              <button
-                type="button"
-                className={`btn ${lang === 'en' ? '' : 'btn-ghost'}`}
-                onClick={() => chooseLanguage('en')}
-              >
-                {t('profile.english')}
-              </button>
-            </div>
-          </Card>
-
-          <Card title={t('profile.data')} icon="download">
-            <p className="small muted">{t('profile.sampleNote')}</p>
-            <div className="row-actions" style={{ marginBlockStart: 10 }}>
-              <button type="button" className="btn btn-ghost" onClick={exportData}>
-                <Icon name="download" size={16} />
-                {t('profile.export')}
+                <Icon name="trash" size={16} />
+                {t('profile.clearConfirm')}
               </button>
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => {
-                  loadSampleData();
-                  setName(data.profile.name);
-                }}
+                onClick={() => setConfirmClear(false)}
               >
-                <Icon name="sparkles" size={16} />
-                {t('profile.sample')}
+                {t('backup.importCancel')}
               </button>
-            </div>
-            <div style={{ marginBlockStart: 12 }}>
-              {confirmClear ? (
-                <div className="alert alert-danger">
-                  <span className="alert-icon">
-                    <Icon name="alert" size={17} />
-                  </span>
-                  <div>
-                    <p className="small" style={{ margin: 0 }}>
-                      {t('profile.clearConfirm')}
-                    </p>
-                    <div className="row-actions" style={{ marginBlockStart: 8 }}>
-                      <button type="button" className="btn btn-danger" onClick={clearAll}>
-                        {t('common.delete')}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => setConfirmClear(false)}
-                      >
-                        {t('common.cancel')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setConfirmClear(true)}
-                >
-                  <Icon name="trash" size={16} />
-                  {t('profile.clear')}
-                </button>
-              )}
-            </div>
-          </Card>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setConfirmClear(true)}
+            >
+              <Icon name="trash" size={16} />
+              {t('profile.clear')}
+            </button>
+          )}
         </div>
-      </div>
-
-      <Card title={t('profile.privacyText')} icon="shield">
-        <p className="small">{t('profile.privacyText')}</p>
-        <p className="tiny muted" style={{ marginBlockStart: 8 }}>
-          {t('setup.privacyText')}
-        </p>
+        <p className="tiny muted">{t('profile.sampleNote')}</p>
+        {storage.error && (
+          <div className="alert alert-danger" role="alert">
+            <Icon name="alert" size={16} />
+            <span>{t('storage.unavailable')}</span>
+          </div>
+        )}
       </Card>
 
       <Card title={t('profile.references')} icon="book">
-        <ol className="ref-list">
-          {references.map((reference) => (
-            <li key={reference.id}>
-              <span>{reference.title}</span>
-              <span className="tiny muted">
-                {reference.publisher}, {reference.year}
-              </span>
+        <ul className="ref-list">
+          {references.map((item) => (
+            <li key={item.title.en}>
+              <strong>{item.title[lang]}</strong>
+              <span className="tiny muted">{item.source}</span>
             </li>
           ))}
-        </ol>
+        </ul>
       </Card>
 
       <Card title={t('profile.about')} icon="info">
-        <p className="small">{t('profile.aboutText')}</p>
-        <p className="tiny muted" style={{ marginBlockStart: 8 }}>
-          {t('profile.version')}: 1.0.0 · {t('profile.updated')}:{' '}
-          {formatDate(new Date(), lang)}
+        <p className="muted">{t('profile.aboutText')}</p>
+        <p className="tiny muted">
+          {t('profile.version')}: 1.0.0
         </p>
       </Card>
 
-      <Disclaimer>{t('common.disclaimer')}</Disclaimer>
+      <Disclaimer />
     </div>
   );
 }
