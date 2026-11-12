@@ -119,11 +119,11 @@ export function ProgressRing({
   );
 }
 
-export function ProgressBar({ percent }: { percent: number }) {
+export function ProgressBar({ percent, tone = 'rose' }: { percent: number; tone?: 'rose' | 'lav' | 'ok' }) {
   const clamped = Math.max(0, Math.min(100, percent));
   return (
     <div
-      className="progress"
+      className={`progress tone-${tone}`}
       role="progressbar"
       aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}
