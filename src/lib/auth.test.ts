@@ -162,6 +162,22 @@ describe('per-account data scoping', () => {
   });
 });
 
+describe('authErrorKey — codes returned by the live project', () => {
+  it('maps an invalid address code to a clear message', () => {
+    expect(authErrorKey('email_address_invalid')).toBe('auth.errorInvalidEmail');
+  });
+
+  it('maps the mailer rate limit to the retry message', () => {
+    expect(authErrorKey('over_email_send_rate_limit')).toBe('auth.errorRateLimited');
+    expect(authErrorKey('email rate limit exceeded')).toBe('auth.errorRateLimited');
+  });
+
+  it('still maps confirmation and credential failures', () => {
+    expect(authErrorKey('Email not confirmed')).toBe('auth.errorEmailNotConfirmed');
+    expect(authErrorKey('Invalid login credentials')).toBe('auth.errorInvalidCredentials');
+  });
+});
+
 describe('providerLabel', () => {
   it('labels known providers and falls back gracefully', () => {
     expect(providerLabel('google')).toBe('Google');
