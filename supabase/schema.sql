@@ -113,12 +113,16 @@ create trigger on_auth_user_created
   execute function public.handle_new_user();
 
 -- ==========================================================================
--- Optional: server-side pregnancy records
+-- Per-user application record (cloud sync target)
 -- --------------------------------------------------------------------------
--- The application currently keeps pregnancy tracking data in the browser
--- (localStorage, namespaced per account) so health data never leaves the
--- device by default. The table below is ready if you later want opt-in cloud
--- backup; it carries the same owner-only RLS rules.
+-- The browser keeps every record in IndexedDB first, keyed by the signed-in
+-- user id, so the app works offline and survives refresh/restart/logout. When
+-- the device is online the client syncs that record into this table, which is
+-- what makes the data follow the account across devices.
+--
+-- The payload is a single JSONB document (profile, LMP, blood pressure, weight,
+-- appointments, visits, fetal movement sessions, hydration, hospital bag and
+-- birth plan). One row per user, owner-only, enforced by RLS below.
 -- ==========================================================================
 create table if not exists public.pregnancy_records (
   user_id uuid primary key references auth.users (id) on delete cascade,
@@ -157,3 +161,14 @@ create policy "records_delete_own"
   for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- `updated_at` is what the client compares against its local timestamp to
+-- decide whether to pull the cloud copy or push the device copy.
+drop trigger if exists records_touch_updated_at on public.pregnancy_records;
+create trigger records_touch_updated_at
+  before update on public.pregnancy_records
+  for each row
+  execute function public.touch_updated_at();
+
+create index if not exists pregnancy_records_updated_at_idx
+  on public.pregnancy_records (updated_at desc);
