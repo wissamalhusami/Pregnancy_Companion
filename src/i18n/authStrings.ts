@@ -200,6 +200,10 @@ export const authStrings: Record<string, Bi> = {
     ar: 'إنشاء الحسابات معطّل حالياً.',
     en: 'Account creation is currently disabled.',
   },
+  'auth.errorEmailProviderDisabled': {
+    ar: 'تسجيل الدخول بالبريد الإلكتروني معطّل في إعدادات مشروع Supabase. فعّلي مزوّد البريد الإلكتروني (Email provider) في Authentication ← Sign In / Providers ثم أعيدي المحاولة.',
+    en: 'Email sign-in is disabled in the Supabase project settings. Enable the Email provider under Authentication → Sign In / Providers, then try again.',
+  },
   'auth.errorNetwork': {
     ar: 'تعذّر الاتصال بالخدمة. تحقّقي من الإنترنت وحاولي مرة أخرى.',
     en: 'Could not reach the service. Check your connection and try again.',
