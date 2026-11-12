@@ -4,6 +4,7 @@ import { useAppState } from '../state/AppState';
 import { weeks } from '../data/weeks';
 import { formatDate, trimesterOf, bpCategory } from '../lib/pregnancy';
 import { Card, ProgressBar, ProgressRing, Stat } from '../components/ui';
+import { HeroArtwork } from '../components/Artwork';
 import { Icon, type IconName } from '../components/Icon';
 import { GLASS_ML } from '../data/nutrition';
 import { toISODate } from '../lib/pregnancy';
@@ -94,12 +95,15 @@ export function Dashboard() {
             )}
           </div>
 
-          <div style={{ display: 'grid', placeItems: 'center', gap: 10 }}>
-            <ProgressRing
-              percent={hasDates ? progress : 0}
-              label={t('dashboard.progress')}
-              caption={hasDates ? `${currentWeek}/40` : '—'}
-            />
+          <div className="hero-visual">
+            <HeroArtwork className="hero-art" />
+            <div className="hero-ring">
+              <ProgressRing
+                percent={hasDates ? progress : 0}
+                label={t('dashboard.progress')}
+                caption={hasDates ? `${currentWeek}/40` : '—'}
+              />
+            </div>
             <span className="tiny muted" style={{ textAlign: 'center' }}>
               {hasDates ? t('dashboard.weekNow') : t('dashboard.lmpMissing')}
             </span>
