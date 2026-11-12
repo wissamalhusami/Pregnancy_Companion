@@ -203,7 +203,114 @@ export function AppStateProvider({
   /** Signed-in accounts get their own storage bucket; guests keep the legacy key. */
   scope?: string;
 }) {
-  const [data, setData] = useStoredState<AppData>(dataStorageKey(scope), initialData);
+  const [data, setData, meta] = useIndexedState<AppData>(dataStorageKey(scope), initialData);
+  const userId = userIdFromScope(scope);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(userId ? 'idle' : 'localOnly');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [syncErrorKey, setSyncErrorKey] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const updatedAtRef = useRef<string | null>(meta.updatedAt);
+  updatedAtRef.current = meta.updatedAt;
+  const syncedJson = useRef<string | null>(null);
+  const syncArmed = useRef(false);
+
+  const push = useCallback(
+    async (payload: AppData) => {
+      if (!userId) return;
+      setSyncStatus('syncing');
+      setSyncErrorKey(null);
+      const result = await pushUserData(userId, payload);
+      if (result.ok) {
+        syncedJson.current = JSON.stringify(payload);
+        setSyncStatus('saved');
+        setSyncErrorKey(null);
+        setLastSyncedAt(result.updatedAt ?? new Date().toISOString());
+      } else {
+        setSyncStatus(result.errorKey === 'sync.errorOffline' ? 'offline' : 'error');
+        setSyncErrorKey(result.errorKey ?? 'sync.errorGeneric');
+      }
+    },
+    [userId],
+  );
+
+  /** Pull the account's saved record, then push whatever is newer locally. */
+  const syncNow = useCallback(async () => {
+    if (!userId) return;
+    setSyncStatus('syncing');
+    setSyncErrorKey(null);
+
+    const remote = await pullUserData(userId);
+    if (!remote.ok) {
+      setSyncStatus(remote.errorKey === 'sync.errorOffline' ? 'offline' : 'error');
+      setSyncErrorKey(remote.errorKey ?? 'sync.errorGeneric');
+      return;
+    }
+
+    if (remote.data && decideSync(updatedAtRef.current, remote.updatedAt) === 'pull') {
+      syncedJson.current = JSON.stringify(remote.data);
+      setData(remote.data);
+      setRestored(true);
+      setSyncStatus('saved');
+      setLastSyncedAt(remote.updatedAt ?? null);
+      return;
+    }
+
+    if (!remote.data && !hasUserData(dataRef.current)) {
+      setSyncStatus('saved');
+      setLastSyncedAt(new Date().toISOString());
+      return;
+    }
+
+    await push(dataRef.current);
+  }, [userId, setData, push]);
+
+  // Restore the account's saved record as soon as local storage is ready.
+  useEffect(() => {
+    if (!meta.ready) return;
+    if (!userId) {
+      syncArmed.current = false;
+      return;
+    }
+    let active = true;
+    syncArmed.current = false;
+    void syncNow().finally(() => {
+      if (active) syncArmed.current = true;
+    });
+    return () => {
+      active = false;
+    };
+  }, [meta.ready, userId, syncNow]);
+
+  // Push local edits shortly after they happen.
+  useEffect(() => {
+    if (!meta.ready || !userId || !syncArmed.current) return;
+    const json = JSON.stringify(data);
+    if (json === syncedJson.current) return;
+    const timer = setTimeout(() => void push(data), 1200);
+    return () => clearTimeout(timer);
+  }, [data, meta.ready, userId, push]);
+
+  // Last-chance flush when the tab is hidden or closed.
+  useEffect(() => {
+    if (!userId) return;
+    const flush = () => {
+      const json = JSON.stringify(dataRef.current);
+      if (json === syncedJson.current) return;
+      void pushUserData(userId, dataRef.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [userId]);
 
   const value = useMemo<AppStateValue>(() => {
     const lmp = parseISODate(data.profile.lmp);
@@ -300,8 +407,38 @@ export function AppStateProvider({
       resetAll: () => setData(initialData),
 
       loadSampleData: () => setData(sampleData()),
+
+      storage: { ready: meta.ready, persisted: meta.persisted, error: meta.error },
+      sync: {
+        status: syncStatus,
+        lastSyncedAt,
+        errorKey: syncErrorKey,
+        restored,
+        retry: () => void syncNow(),
+      },
     };
-  }, [data, setData]);
+  }, [
+    data,
+    setData,
+    syncStatus,
+    lastSyncedAt,
+    syncErrorKey,
+    restored,
+    syncNow,
+    meta.ready,
+    meta.persisted,
+    meta.error,
+  ]);
+
+  // Never render a half-hydrated record: it would flash the setup screen.
+  if (!meta.ready) {
+    return (
+      <div className="boot-screen" role="status" aria-live="polite">
+        <div className="boot-mark" aria-hidden="true" />
+        <p className="boot-text">RIFQAH · رِفْقَة</p>
+      </div>
+    );
+  }
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

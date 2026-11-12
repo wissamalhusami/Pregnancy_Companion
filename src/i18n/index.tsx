@@ -43,6 +43,44 @@ export const ui: Record<string, Bi> = {
   'common.day': { ar: 'يوم', en: 'day' },
   'common.empty': { ar: 'لا توجد بيانات مسجلة بعد', en: 'No records yet' },
   'common.saved': { ar: 'تم الحفظ', en: 'Saved' },
+
+  // Storage + cloud sync status (IndexedDB primary, Supabase when online).
+  'storage.loading': { ar: 'جارٍ تحميل بياناتكِ المحفوظة…', en: 'Loading your saved data…' },
+  'storage.unavailable': {
+    ar: 'تعذّر الوصول إلى تخزين الجهاز — البيانات محفوظة في هذه الجلسة فقط.',
+    en: 'Device storage is unavailable — data is kept for this session only.',
+  },
+  'storage.memoryOnly': { ar: 'ذاكرة مؤقتة', en: 'Memory only' },
+  'sync.syncing': { ar: 'جارٍ الحفظ…', en: 'Saving…' },
+  'sync.saved': { ar: 'محفوظ', en: 'Saved' },
+  'sync.localOnly': { ar: 'محفوظ على الجهاز', en: 'Saved on device' },
+  'sync.offline': { ar: 'محفوظ على الجهاز — بلا اتصال', en: 'Saved on device — offline' },
+  'sync.errorShort': { ar: 'تعذّرت المزامنة', en: 'Sync failed' },
+  'sync.retry': { ar: 'إعادة المحاولة', en: 'Retry' },
+  'sync.restored': {
+    ar: 'تمت استعادة بياناتكِ المحفوظة من حسابك.',
+    en: 'Your saved data was restored from your account.',
+  },
+  'sync.errorGeneric': {
+    ar: 'تعذّر إرسال بياناتكِ إلى السحابة. بياناتكِ محفوظة على هذا الجهاز.',
+    en: 'Could not send your data to the cloud. It is saved on this device.',
+  },
+  'sync.errorOffline': {
+    ar: 'لا يوجد اتصال بالإنترنت. بياناتكِ محفوظة على الجهاز وستُزامَن لاحقاً.',
+    en: 'No internet connection. Your data is saved on this device and will sync later.',
+  },
+  'sync.errorNoTable': {
+    ar: 'جدول البيانات غير موجود في Supabase — شغّلي ملف supabase/schema.sql.',
+    en: 'The Supabase table is missing — run supabase/schema.sql.',
+  },
+  'sync.errorPermission': {
+    ar: 'رفض الخادم الوصول إلى سجلكِ. سجّلي الدخول من جديد.',
+    en: 'The server refused access to your record. Please sign in again.',
+  },
+  'sync.errorNoClient': {
+    ar: 'لم يتم ربط Supabase بعد.',
+    en: 'Supabase is not connected yet.',
+  },
   'common.reset': { ar: 'إعادة تعيين', en: 'Reset' },
   'common.minutes': { ar: 'دقيقة', en: 'minutes' },
   'common.kg': { ar: 'كجم', en: 'kg' },
