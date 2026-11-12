@@ -101,6 +101,11 @@ export function useIndexedState<T>(key: string, initial: T) {
   const metaRef = useRef(meta);
   metaRef.current = meta;
 
+  // The newest value still waiting for the debounced write, so it can be
+  // flushed immediately when the tab hides or a page reload follows a save.
+  const pending = useRef<{ value: T; dirty: boolean } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Hydrate from IndexedDB, migrating the pre-IndexedDB localStorage payload.
   useEffect(() => {
     let active = true;
@@ -145,6 +150,38 @@ export function useIndexedState<T>(key: string, initial: T) {
     setValue((previous) => (typeof next === 'function' ? (next as (previous: T) => T)(previous) : next));
   }, []);
 
+  /**
+   * Write right now instead of waiting for the debounce.
+   *
+   * Needed before a reload that may follow a save (the pending 200 ms timer
+   * never runs if the document goes away first) and when the tab is hidden.
+   * Pass `next` to store a value that has not been rendered yet.
+   */
+  const flush = useCallback(
+    async (next?: T): Promise<boolean> => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+
+      const target = next ?? (pending.current?.dirty ? pending.current.value : undefined);
+      if (target === undefined) return true;
+
+      pending.current = { value: target, dirty: false };
+      const stamp = new Date().toISOString();
+      const ok = await idbWrite(key, target, stamp);
+      setMeta((previous) => ({
+        ...previous,
+        persisted: ok,
+        error: ok ? null : 'storage.unavailable',
+        updatedAt: ok ? stamp : previous.updatedAt,
+      }));
+      if (ok) channel.current?.postMessage({ key, updatedAt: stamp });
+      return ok;
+    },
+    [key],
+  );
+
   // Persist after a short debounce so rapid edits collapse into one write.
   useEffect(() => {
     if (!meta.ready) return;
@@ -153,25 +190,32 @@ export function useIndexedState<T>(key: string, initial: T) {
       return;
     }
 
-    const timer = setTimeout(() => {
-      const stamp = new Date().toISOString();
-      void idbWrite(key, value, stamp).then((ok) => {
-        setMeta((previous) =>
-          previous.persisted === ok && previous.updatedAt === stamp
-            ? previous
-            : {
-                ...previous,
-                persisted: ok,
-                error: ok ? null : 'storage.unavailable',
-                updatedAt: ok ? stamp : previous.updatedAt,
-              },
-        );
-        if (ok) channel.current?.postMessage({ key, updatedAt: stamp });
-      });
+    pending.current = { value, dirty: true };
+    const id = setTimeout(() => {
+      timer.current = null;
+      void flush();
     }, 200);
+    timer.current = id;
 
-    return () => clearTimeout(timer);
-  }, [key, value, meta.ready]);
+    return () => {
+      clearTimeout(id);
+      if (timer.current === id) timer.current = null;
+    };
+  }, [key, value, meta.ready, flush]);
+
+  // Closing or reloading the tab must not drop the last edit.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void flush();
+    };
+    const onPageHide = () => void flush();
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [flush]);
 
   // Keep other tabs of the same account in step without re-broadcasting.
   useEffect(() => {
@@ -195,7 +239,7 @@ export function useIndexedState<T>(key: string, initial: T) {
     };
   }, [key]);
 
-  return [value, update, meta] as const;
+  return [value, update, meta, flush] as const;
 }
 
 export function createId(prefix = 'id'): string {

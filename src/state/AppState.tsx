@@ -98,7 +98,8 @@ interface AppStateValue {
   currentWeek: number;
   progress: number;
   daysLeft: number;
-  updateProfile: (profile: Profile) => void;
+  /** Resolves once the profile is durably stored on this device. */
+  updateProfile: (profile: Profile) => Promise<boolean>;
   setBirthPlan: (plan: BirthPlan) => void;
   addBP: (reading: Omit<BPReading, 'id'>) => void;
   removeBP: (id: string) => void;
@@ -112,9 +113,14 @@ interface AppStateValue {
   setWater: (dateISO: string, glasses: number) => void;
   toggleBagItem: (id: string) => void;
   resetAll: () => void;
-  loadSampleData: () => void;
+  loadSampleData: () => Promise<boolean>;
   /** Device storage state (IndexedDB). */
-  storage: { ready: boolean; persisted: boolean; error: string | null };
+  storage: {
+    ready: boolean;
+    persisted: boolean;
+    error: string | null;
+    flush: () => Promise<boolean>;
+  };
   /** Cloud sync state; local data is always kept when the cloud is unreachable. */
   sync: {
     status: SyncStatus;
@@ -203,7 +209,10 @@ export function AppStateProvider({
   /** Signed-in accounts get their own storage bucket; guests keep the legacy key. */
   scope?: string;
 }) {
-  const [data, setData, meta] = useIndexedState<AppData>(dataStorageKey(scope), initialData);
+  const [data, setData, meta, flushStorage] = useIndexedState<AppData>(
+    dataStorageKey(scope),
+    initialData,
+  );
   const userId = userIdFromScope(scope);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(userId ? 'idle' : 'localOnly');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -325,13 +334,16 @@ export function AppStateProvider({
       progress: ga ? progressPercent(ga.totalDays) : 0,
       daysLeft: ga ? daysRemaining(ga.totalDays) : 0,
 
-      updateProfile: (profile) =>
-        setData((previous) => ({
-          ...previous,
+      updateProfile: (profile) => {
+        const next: AppData = {
+          ...dataRef.current,
           profile,
-          appointments: buildAppointments(profile.lmp, previous.appointments),
+          appointments: buildAppointments(profile.lmp, dataRef.current.appointments),
           setupComplete: Boolean(profile.lmp),
-        })),
+        };
+        setData(next);
+        return flushStorage(next);
+      },
 
       setBirthPlan: (birthPlan) => setData((previous) => ({ ...previous, birthPlan })),
 
@@ -404,11 +416,23 @@ export function AppStateProvider({
           bag: { ...previous.bag, [id]: !previous.bag[id] },
         })),
 
-      resetAll: () => setData(initialData),
+      resetAll: () => {
+        setData(initialData);
+        void flushStorage(initialData);
+      },
 
-      loadSampleData: () => setData(sampleData()),
+      loadSampleData: () => {
+        const sample = sampleData();
+        setData(sample);
+        return flushStorage(sample);
+      },
 
-      storage: { ready: meta.ready, persisted: meta.persisted, error: meta.error },
+      storage: {
+        ready: meta.ready,
+        persisted: meta.persisted,
+        error: meta.error,
+        flush: () => flushStorage(),
+      },
       sync: {
         status: syncStatus,
         lastSyncedAt,
@@ -425,6 +449,7 @@ export function AppStateProvider({
     syncErrorKey,
     restored,
     syncNow,
+    flushStorage,
     meta.ready,
     meta.persisted,
     meta.error,
