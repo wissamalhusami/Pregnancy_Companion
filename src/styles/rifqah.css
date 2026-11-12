@@ -64,6 +64,10 @@
 
   --header-h: 76px;
   --sidebar-w: 274px;
+
+  /* typography: Tajawal for Arabic, Manrope for Latin */
+  --font-ar: 'Tajawal', 'Segoe UI', system-ui, sans-serif;
+  --font-en: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 /* ---------------------------------------------------------------- base ---- */

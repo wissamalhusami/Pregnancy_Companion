@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './state/AuthContext';
 import { loadRuntimeConfig } from './lib/config';
 import { storageScopeFor } from './lib/auth';
 import './styles/global.css';
+import './styles/rifqah.css';
 
 /** Waits for the session check so a protected page never flashes the wrong state. */
 function AppStateGate({ children }: { children: React.ReactNode }) {
