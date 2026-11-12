@@ -1,0 +1,278 @@
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createId, useStoredState } from '../lib/storage';
+import type {
+  AppData,
+  Appointment,
+  BirthPlan,
+  BPReading,
+  MovementSession,
+  Profile,
+  VisitRecord,
+  WeightEntry,
+} from '../lib/types';
+import {
+  addDays,
+  clampWeek,
+  daysRemaining,
+  dueDateFromLMP,
+  gestationalAge,
+  parseISODate,
+  progressPercent,
+  toISODate,
+  type GestationalAge,
+} from '../lib/pregnancy';
+
+/** WHO 2016 eight-contact antenatal model, expressed as gestational weeks. */
+export const ANC_WEEKS = [12, 20, 26, 30, 34, 36, 38, 40] as const;
+
+const emptyProfile: Profile = {
+  name: '',
+  lmp: '',
+  prePregnancyWeightKg: null,
+  heightCm: null,
+  clinic: '',
+};
+
+const emptyBirthPlan: BirthPlan = {
+  birthPlace: '',
+  supportPerson: '',
+  painRelief: '',
+  positions: '',
+  feedingPlan: '',
+  specialRequests: '',
+  skinToSkin: true,
+  cordClamping: true,
+  notes: '',
+};
+
+export const initialData: AppData = {
+  profile: emptyProfile,
+  bp: [],
+  weight: [],
+  appointments: [],
+  visits: [],
+  movements: [],
+  water: {},
+  bag: {},
+  birthPlan: emptyBirthPlan,
+  setupComplete: false,
+};
+
+export function buildAppointments(lmpISO: string, existing: Appointment[] = []): Appointment[] {
+  const lmp = parseISODate(lmpISO);
+  if (!lmp) return existing;
+  return ANC_WEEKS.map((week) => {
+    const previous = existing.find((item) => item.week === week);
+    return {
+      id: previous?.id ?? createId(`anc${week}`),
+      week,
+      date: toISODate(addDays(lmp, week * 7)),
+      done: previous?.done ?? false,
+      notes: previous?.notes ?? '',
+    };
+  });
+}
+
+interface AppStateValue {
+  data: AppData;
+  ga: GestationalAge | null;
+  eddISO: string | null;
+  currentWeek: number;
+  progress: number;
+  daysLeft: number;
+  updateProfile: (profile: Profile) => void;
+  setBirthPlan: (plan: BirthPlan) => void;
+  addBP: (reading: Omit<BPReading, 'id'>) => void;
+  removeBP: (id: string) => void;
+  addWeight: (entry: Omit<WeightEntry, 'id'>) => void;
+  removeWeight: (id: string) => void;
+  toggleAppointment: (id: string) => void;
+  addVisit: (visit: Omit<VisitRecord, 'id'>) => void;
+  removeVisit: (id: string) => void;
+  addMovement: (session: Omit<MovementSession, 'id'>) => void;
+  removeMovement: (id: string) => void;
+  setWater: (dateISO: string, glasses: number) => void;
+  toggleBagItem: (id: string) => void;
+  resetAll: () => void;
+  loadSampleData: () => void;
+}
+
+const AppStateContext = createContext<AppStateValue | null>(null);
+
+function sampleData(): AppData {
+  const today = new Date();
+  // A realistic mid-pregnancy scenario: 24 weeks + 2 days.
+  const lmp = addDays(today, -170);
+  const lmpISO = toISODate(lmp);
+
+  const bp: BPReading[] = [
+    { id: createId('bp'), date: `${toISODate(addDays(today, -84))}T09:15:00`, systolic: 112, diastolic: 70, pulse: 78, note: '' },
+    { id: createId('bp'), date: `${toISODate(addDays(today, -56))}T10:05:00`, systolic: 118, diastolic: 74, pulse: 82, note: '' },
+    { id: createId('bp'), date: `${toISODate(addDays(today, -28))}T09:40:00`, systolic: 122, diastolic: 76, pulse: 80, note: '' },
+    { id: createId('bp'), date: `${toISODate(addDays(today, -3))}T11:20:00`, systolic: 116, diastolic: 72, pulse: 84, note: '' },
+  ];
+
+  const weight: WeightEntry[] = [
+    { id: createId('w'), date: toISODate(addDays(today, -140)), kg: 61.5 },
+    { id: createId('w'), date: toISODate(addDays(today, -98)), kg: 63.2 },
+    { id: createId('w'), date: toISODate(addDays(today, -56)), kg: 66.0 },
+    { id: createId('w'), date: toISODate(addDays(today, -14)), kg: 68.4 },
+  ];
+
+  const visits: VisitRecord[] = [
+    {
+      id: createId('v'),
+      date: toISODate(addDays(today, -28)),
+      provider: 'Dr. Layla Hassan – Antenatal clinic',
+      reason: 'Routine antenatal visit',
+      bp: '122/76',
+      weightKg: 66,
+      notes: 'Fundal height consistent with dates. Fetal heart heard. Iron and folic acid continued.',
+    },
+  ];
+
+  const movements: MovementSession[] = [
+    { id: createId('m'), startedAt: `${toISODate(addDays(today, -2))}T20:30:00`, durationMin: 42, count: 10 },
+    { id: createId('m'), startedAt: `${toISODate(addDays(today, -1))}T21:10:00`, durationMin: 55, count: 10 },
+  ];
+
+  const appointments = buildAppointments(lmpISO).map((item) => ({
+    ...item,
+    done: item.week <= 20,
+  }));
+
+  return {
+    profile: {
+      name: 'مريم / Maryam',
+      lmp: lmpISO,
+      prePregnancyWeightKg: 61.5,
+      heightCm: 163,
+      clinic: 'Al-Amal Maternity Hospital',
+    },
+    bp,
+    weight,
+    visits,
+    movements,
+    appointments,
+    water: { [toISODate(today)]: 4 },
+    bag: { 'bag-1': true, 'bag-2': true, 'bag-5': true, 'bag-9': true, 'bag-14': true },
+    birthPlan: {
+      ...emptyBirthPlan,
+      birthPlace: 'Al-Amal Maternity Hospital',
+      supportPerson: 'Husband',
+      painRelief: 'Breathing techniques, then epidural if needed',
+      feedingPlan: 'Exclusive breastfeeding',
+    },
+    setupComplete: true,
+  };
+}
+
+export function AppStateProvider({ children }: { children: ReactNode }) {
+  const [data, setData] = useStoredState<AppData>('data', initialData);
+
+  const value = useMemo<AppStateValue>(() => {
+    const lmp = parseISODate(data.profile.lmp);
+    const ga = lmp ? gestationalAge(lmp) : null;
+    const eddISO = lmp ? toISODate(dueDateFromLMP(lmp)) : null;
+
+    return {
+      data,
+      ga,
+      eddISO,
+      currentWeek: ga ? clampWeek(Math.floor(ga.totalDays / 7) || 1) : 1,
+      progress: ga ? progressPercent(ga.totalDays) : 0,
+      daysLeft: ga ? daysRemaining(ga.totalDays) : 0,
+
+      updateProfile: (profile) =>
+        setData((previous) => ({
+          ...previous,
+          profile,
+          appointments: buildAppointments(profile.lmp, previous.appointments),
+          setupComplete: Boolean(profile.lmp),
+        })),
+
+      setBirthPlan: (birthPlan) => setData((previous) => ({ ...previous, birthPlan })),
+
+      addBP: (reading) =>
+        setData((previous) => ({
+          ...previous,
+          bp: [...previous.bp, { ...reading, id: createId('bp') }].sort((a, b) =>
+            a.date < b.date ? 1 : -1,
+          ),
+        })),
+
+      removeBP: (id) =>
+        setData((previous) => ({ ...previous, bp: previous.bp.filter((item) => item.id !== id) })),
+
+      addWeight: (entry) =>
+        setData((previous) => ({
+          ...previous,
+          weight: [...previous.weight, { ...entry, id: createId('w') }].sort((a, b) =>
+            a.date < b.date ? 1 : -1,
+          ),
+        })),
+
+      removeWeight: (id) =>
+        setData((previous) => ({
+          ...previous,
+          weight: previous.weight.filter((item) => item.id !== id),
+        })),
+
+      toggleAppointment: (id) =>
+        setData((previous) => ({
+          ...previous,
+          appointments: previous.appointments.map((item) =>
+            item.id === id ? { ...item, done: !item.done } : item,
+          ),
+        })),
+
+      addVisit: (visit) =>
+        setData((previous) => ({
+          ...previous,
+          visits: [{ ...visit, id: createId('v') }, ...previous.visits],
+        })),
+
+      removeVisit: (id) =>
+        setData((previous) => ({
+          ...previous,
+          visits: previous.visits.filter((item) => item.id !== id),
+        })),
+
+      addMovement: (session) =>
+        setData((previous) => ({
+          ...previous,
+          movements: [{ ...session, id: createId('m') }, ...previous.movements],
+        })),
+
+      removeMovement: (id) =>
+        setData((previous) => ({
+          ...previous,
+          movements: previous.movements.filter((item) => item.id !== id),
+        })),
+
+      setWater: (dateISO, glasses) =>
+        setData((previous) => ({
+          ...previous,
+          water: { ...previous.water, [dateISO]: Math.max(0, glasses) },
+        })),
+
+      toggleBagItem: (id) =>
+        setData((previous) => ({
+          ...previous,
+          bag: { ...previous.bag, [id]: !previous.bag[id] },
+        })),
+
+      resetAll: () => setData(initialData),
+
+      loadSampleData: () => setData(sampleData()),
+    };
+  }, [data, setData]);
+
+  return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
+}
+
+export function useAppState(): AppStateValue {
+  const context = useContext(AppStateContext);
+  if (!context) throw new Error('useAppState must be used within AppStateProvider');
+  return context;
+}
