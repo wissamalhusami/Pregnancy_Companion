@@ -25,11 +25,11 @@ describe('bilingual UI dictionary', () => {
 });
 
 describe('week-by-week content', () => {
-  it('covers weeks 4 to 40 without gaps', () => {
+  it('covers weeks 1 to 40 without gaps', () => {
     const numbers = weeks.map((entry) => entry.week);
-    expect(numbers[0]).toBe(4);
+    expect(numbers[0]).toBe(1);
     expect(numbers[numbers.length - 1]).toBe(40);
-    for (let week = 4; week <= 40; week += 1) {
+    for (let week = 1; week <= 40; week += 1) {
       expect(numbers).toContain(week);
     }
     expect(new Set(numbers).size).toBe(numbers.length);
@@ -40,7 +40,8 @@ describe('week-by-week content', () => {
       expect(filled(entry.fetal)).toBe(true);
       expect(filled(entry.maternal)).toBe(true);
       expect(filled(entry.tip)).toBe(true);
-      expect(entry.lengthCm).toBeGreaterThan(0);
+      // Very early weeks are measured in millimetres, so 0 cm is acceptable there.
+      expect(entry.lengthCm).toBeGreaterThanOrEqual(0);
       expect(entry.weightG).toBeGreaterThanOrEqual(0);
     }
   });
@@ -76,7 +77,7 @@ describe('required educational topics', () => {
   it('covers the required nutrients', () => {
     const ids = nutrients.map((nutrient) => nutrient.id);
     expect(ids).toEqual(
-      expect.arrayContaining(['folate', 'iron', 'calcium', 'vitamin-d', 'protein']),
+      expect.arrayContaining(['folate', 'iron', 'calcium', 'vitd', 'protein']),
     );
   });
 
