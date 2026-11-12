@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { ...previous, user: { ...previous.user, user_metadata: metadata } };
         });
       })
-      .catch(() => {
+      .then(undefined, () => {
         /* profiles table not provisioned yet — metadata is enough */
       });
     return () => {
